@@ -36,7 +36,7 @@ impl Question {
                 "y" | "j" => return true,
                 "n" => return false,
                 c => {
-                    println!("unecpected char \"{}\" - reask.", c);
+                    eprintln!("unecpected char \"{}\" - reask.", c);
                     continue;
                 }
             };

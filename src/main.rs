@@ -84,7 +84,7 @@ fn run_main() -> Result<(), Error> {
         FilesystemCheckResult::IsOk => {}
         FilesystemCheckResult::IsNotInstalled => enter_filesystem_wizard()?,
         FilesystemCheckResult::HasErrors(ref errors) => {
-            println!("issues with the filesystem.");
+            eprintln!("issues with the filesystem.");
             for e in errors {
                 eprintln!(" error: {}", e);
             }
@@ -113,7 +113,7 @@ fn run_main() -> Result<(), Error> {
                 return Ok(());
             }
             Err(e) => {
-                println!("Error: {}", e);
+                eprintln!("Error: {}", e);
                 ::std::process::exit(1);
             }
         }
@@ -136,7 +136,7 @@ fn run_main() -> Result<(), Error> {
                 print!("{}", c);
             }
             Err(e) => {
-                println!("Error: {}", e);
+                eprintln!("Error: {}", e);
                 ::std::process::exit(1);
             }
         }
@@ -194,8 +194,8 @@ fn run_main() -> Result<(), Error> {
 }
 
 pub fn enter_filesystem_wizard() -> Result<(), Error> {
-    println!("seems that vault isnt \"installed\" here.");
-    println!("may you're just in the wrong directory?");
+    eprintln!("seems that vault isnt \"installed\" here.");
+    eprintln!("may you're just in the wrong directory?");
 
     if Question::confirm("do you want to create an empty ./.vault directory?") {
         Filesystem::create_basic_directory_structure()?

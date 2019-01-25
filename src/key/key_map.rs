@@ -132,7 +132,7 @@ impl KeyMap {
             }
 
             if !path_as_string.ends_with(".pem") {
-                println!("info: unexpected file {}", &path_as_string);
+                eprintln!("info: unexpected file {}", &path_as_string);
                 continue;
             }
 
@@ -280,7 +280,7 @@ impl KeyMap {
                 }
 
                 if !path_as_string.ends_with(".crypt") {
-                    println!(
+                    eprintln!(
                         "warning: found a invalid file {} in secrets.",
                         &path_as_string
                     );

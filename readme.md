@@ -61,9 +61,14 @@ Die Platzhalter haben den Aufbau: `{vault{ KEY }vault}`.
 
 ```
 vault template ./example_template
+// oder
+vault template ./example_template 1> example_template_decoded
 ```
 
 Vault wirft einen Fehler, falls Keys nicht ersetzt werden können.
+
+** Achtung: ** Vault erzeugt ggf. ein error Output wenn es z. B. über Dateien stolpert welche es nicht verarbeiten kann.
+Daher immer nur den stdout `1>` in ein template übergeben.
 
 ### Overriding the Private Key Directory
 
