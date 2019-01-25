@@ -111,59 +111,67 @@ impl KeyMap {
     pub fn build_private_pems(config: &KeyMapConfig) -> Result<Vec<Pem>, ::failure::Error> {
         let mut buffer = vec![];
 
-        let paths = fs::read_dir(&config.path_private_key).context(format_err!(
+        let mut lookup_paths = vec![];
+
+        lookup_paths.push(fs::read_dir(&config.path_private_key).context(format_err!(
             "private key directory {} is not readable",
             &config.path_private_key
-        ))?;
+        ))?);
 
-        for path in paths {
-            let path_as_string = path
-                .context("could not parse path")?
-                .path()
-                .display()
-                .to_string();
+        if let Ok(home_path) = fs::read_dir("~/.vault/private_keys") {
+            lookup_paths.push(home_path)
+        }
 
-            if path_as_string.ends_with(".md") || path_as_string.ends_with(".DS_Store") {
-                continue;
-            }
+        for paths in lookup_paths {
+            for path in paths {
+                let path_as_string = path
+                    .context("could not parse path")?
+                    .path()
+                    .display()
+                    .to_string();
 
-            if path_as_string.ends_with(".pub.pem") {
-                continue;
-            }
+                if path_as_string.ends_with(".md") || path_as_string.ends_with(".DS_Store") {
+                    continue;
+                }
 
-            if !path_as_string.ends_with(".pem") {
-                eprintln!("info: unexpected file {}", &path_as_string);
-                continue;
-            }
+                if path_as_string.ends_with(".pub.pem") {
+                    continue;
+                }
 
-            // path is a private key, no lets try to find the pub key.
+                if !path_as_string.ends_with(".pem") {
+                    eprintln!("info: unexpected file {}", &path_as_string);
+                    continue;
+                }
 
-            let public_key_path =
-                format!("{}.pub.pem", &path_as_string[..path_as_string.len() - 4]);
+                // path is a private key, no lets try to find the pub key.
 
-            let file_exists = match fs::metadata(&public_key_path) {
-                Err(_) => false,
-                Ok(metadata) => metadata.is_file(),
-            };
+                let public_key_path =
+                    format!("{}.pub.pem", &path_as_string[..path_as_string.len() - 4]);
 
-            if !file_exists {
-                return Err(format_err!(
-                    "private key given at: {} but public key is not found at: {}",
-                    &path_as_string,
-                    &public_key_path
+                let file_exists = match fs::metadata(&public_key_path) {
+                    Err(_) => false,
+                    Ok(metadata) => metadata.is_file(),
+                };
+
+                if !file_exists {
+                    return Err(format_err!(
+                        "private key given at: {} but public key is not found at: {}",
+                        &path_as_string,
+                        &public_key_path
+                    ));
+                }
+
+                buffer.push(Pem::new(
+                    PrivateKey::load_from_file(&path_as_string).context(format_err!(
+                        "failed, to add key, private key: {}",
+                        &path_as_string
+                    ))?,
+                    PublicKey::load_from_file(&public_key_path).context(format_err!(
+                        "failed, to add key, private key: {}",
+                        &path_as_string
+                    ))?,
                 ));
             }
-
-            buffer.push(Pem::new(
-                PrivateKey::load_from_file(&path_as_string).context(format_err!(
-                    "failed, to add key, private key: {}",
-                    &path_as_string
-                ))?,
-                PublicKey::load_from_file(&public_key_path).context(format_err!(
-                    "failed, to add key, private key: {}",
-                    &path_as_string
-                ))?,
-            ));
         }
 
         Ok(buffer)
