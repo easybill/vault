@@ -118,8 +118,10 @@ impl KeyMap {
             &config.path_private_key
         ))?);
 
-        if let Ok(home_path) = fs::read_dir("~/.vault/private_keys") {
-            lookup_paths.push(home_path)
+        if let Some(home_dir) = dirs::home_dir() {
+            if let Ok(home_path) = fs::read_dir(home_dir.join(".vault/private_keys")) {
+                lookup_paths.push(home_path);
+            }
         }
 
         for paths in lookup_paths {

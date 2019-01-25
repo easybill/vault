@@ -8,6 +8,7 @@ extern crate regex;
 extern crate failure;
 extern crate byteorder;
 extern crate failure_derive;
+extern crate dirs;
 
 use clap::{App, Arg, SubCommand};
 

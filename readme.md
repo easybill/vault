@@ -72,7 +72,8 @@ Daher immer nur den stdout `1>` in ein template übergeben.
 
 ### Overriding the Private Key Directory
 
-just use the environment variable `VAULT_PRIVATE_KEY_PATH`
+by default vault will lookup `~/.vault/private_keys` and `~/.vault/private_keys`.
+you can overwrite the directory using the environment variable `VAULT_PRIVATE_KEY_PATH`
 
 ```
 VAULT_PRIVATE_KEY_PATH=[PATH] vault get foo
