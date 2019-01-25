@@ -1,0 +1,15 @@
+[package]
+name = "vault"
+version = "0.1.0"
+authors = ["timglabisch <glabisch@easybill.de>"]
+
+[dependencies]
+openssl = "0.10.*"
+toml = "0.4"
+serde_derive = "*"
+serde = "*"
+clap = "2.*"
+regex = "1.*"
+failure = "0.1.*"
+failure_derive = "0.1.*"
+byteorder = "1.*"
