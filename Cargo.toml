@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["timglabisch <glabisch@easybill.de>"]
 
 [dependencies]
-openssl = "0.10.*"
+openssl = {version = "0.10.*", features = ["vendored"]}
 toml = "0.5.*"
 serde_derive = "*"
 serde = "*"
