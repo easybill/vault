@@ -114,7 +114,7 @@ fn run_main() -> Result<(), Error> {
                 return Ok(());
             }
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {}", pretty_error(&e));
                 ::std::process::exit(1);
             }
         }

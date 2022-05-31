@@ -67,7 +67,7 @@ impl VaultFile {
         let keyfile_size = BigEndian::read_u64(&header_buffer[4..12]) as usize;
         let secret_bytes_size = BigEndian::read_u64(&header_buffer[12..20]) as usize;
 
-        if keyfile_size > 100_000 || secret_bytes_size > 1_000_000_000 {
+        if keyfile_size > 50_000 || secret_bytes_size > 1_000_000_000 {
             // ensure nobody kills us with a wrong vault file :)
             return Err(format_err!("keysize is not supported."));
         }
