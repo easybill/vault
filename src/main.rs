@@ -5,15 +5,14 @@ extern crate serde_derive;
 extern crate clap;
 extern crate regex;
 #[macro_use]
-extern crate failure;
 extern crate byteorder;
-extern crate failure_derive;
 extern crate dirs;
+extern crate anyhow;
+
+use anyhow::{anyhow, Context, Error, format_err};
 
 use clap::{App, Arg, SubCommand};
 
-use failure::Error;
-use failure::ResultExt;
 use filesystem::Filesystem;
 use filesystem::FilesystemCheckResult;
 use key::key_map::KeyMap;
@@ -32,20 +31,9 @@ mod ui;
 
 fn main() {
     if let Err(err) = run_main() {
-        eprintln!("Error: {}", pretty_error(&err));
+        eprintln!("Error: {}", &err);
         std::process::exit(1);
     }
-}
-
-fn pretty_error(err: &failure::Error) -> String {
-    let mut pretty = err.to_string();
-    let mut prev = err.cause();
-    while let Some(next) = prev.cause() {
-        pretty.push_str(": ");
-        pretty.push_str(&next.to_string());
-        prev = next;
-    }
-    pretty
 }
 
 fn run_main() -> Result<(), Error> {
@@ -90,7 +78,7 @@ fn run_main() -> Result<(), Error> {
                 eprintln!(" error: {}", e);
             }
 
-            return Err(format_err!("issues with the filesystem."));
+            return Err(anyhow!("issues with the filesystem."));
         }
     };
 
@@ -114,7 +102,7 @@ fn run_main() -> Result<(), Error> {
                 return Ok(());
             }
             Err(e) => {
-                eprintln!("Error: {}", pretty_error(&e));
+                eprintln!("Error: {}", &e);
                 ::std::process::exit(1);
             }
         }
@@ -205,7 +193,7 @@ pub fn enter_filesystem_wizard() -> Result<(), Error> {
     Ok(())
 }
 
-pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize, ::failure::Error> {
+pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize, Error> {
     let mut new_secrets_created = 0;
 
     let secret_path = "./.vault/secrets/";
@@ -243,7 +231,7 @@ pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize, ::failure::Error> 
     Ok(new_secrets_created)
 }
 
-pub fn create_keys(username: &str) -> Result<(), ::failure::Error> {
+pub fn create_keys(username: &str) -> Result<(), Error> {
     use std::fs::File;
     use std::io::Write;
 

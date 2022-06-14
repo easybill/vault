@@ -1,7 +1,6 @@
-use failure::Error;
-use failure::ResultExt;
 use std::fs::File;
 use std::io::Read;
+use anyhow::{anyhow, Context, Error};
 
 pub mod key_map;
 
@@ -50,11 +49,11 @@ struct Key;
 
 impl Key {
     pub fn load_from_file(path: &str) -> Result<Vec<u8>, Error> {
-        let mut f = File::open(path).context(format_err!("open file {}", path))?;
+        let mut f = File::open(path).context(anyhow!("open file {}", path))?;
         let mut content: Vec<u8> = vec![];
 
         f.read_to_end(&mut content)
-            .context(format_err!("could not read file {}", path))?;
+            .context(anyhow!("could not read file {}", path))?;
 
         Ok(content)
     }
@@ -73,7 +72,7 @@ impl PublicKey {
                 };
 
                 if !filename.ends_with(".pub.pem") {
-                    return Err(format_err!(
+                    return Err(anyhow!(
                         "public key '{}' does not end with .pub.pem",
                         path
                     ));
@@ -106,7 +105,7 @@ impl PrivateKey {
                 };
 
                 if !filename.ends_with(".pem") {
-                    return Err(format_err!("private key '{}' does not end with .pem", path));
+                    return Err(anyhow!("private key '{}' does not end with .pem", path));
                 }
 
                 filename[..filename.len() - 4].to_string()

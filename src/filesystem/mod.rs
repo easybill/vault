@@ -1,5 +1,6 @@
 use fs;
 use std::path::Path;
+use anyhow::{anyhow, Context, Error};
 
 pub struct Filesystem;
 
@@ -56,10 +57,10 @@ impl Filesystem {
         FilesystemCheckResult::new_ok()
     }
 
-    pub fn create_basic_directory_structure() -> Result<(), ::failure::Error> {
+    pub fn create_basic_directory_structure() -> Result<(), Error> {
         for dir in Self::get_basic_directories().iter() {
             fs::create_dir_all(&dir)
-                .map_err(|e| format_err!("could not create directory {}, {}", &dir, e))?
+                .map_err(|e| anyhow!("could not create directory {}, {}", &dir, e))?
         }
 
         Ok(())

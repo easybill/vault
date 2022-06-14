@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use anyhow::{anyhow, Context, Error};
 use key::key_map::KeyMap;
 use regex::Regex;
 use std::fs::File;
@@ -13,14 +13,14 @@ impl<'a> Template<'a> {
         Template { keymap }
     }
 
-    pub fn parse_from_file(&self, filename: &str) -> Result<String, ::failure::Error> {
+    pub fn parse_from_file(&self, filename: &str) -> Result<String, Error> {
         let mut file_content = {
             let mut f = File::open(filename)
-                .context(format_err!("could not open tempalte {}.", &filename))?;
+                .context(anyhow!("could not open tempalte {}.", &filename))?;
 
             let mut buffer = String::new();
 
-            f.read_to_string(&mut buffer).context(format_err!(
+            f.read_to_string(&mut buffer).context(anyhow!(
                 "could not read content of template {}",
                 &filename
             ))?;
@@ -37,17 +37,17 @@ impl<'a> Template<'a> {
             for capture in captures {
                 let from = capture
                     .get(0)
-                    .ok_or_else(|| format_err!("could not extract capture"))?
+                    .ok_or_else(|| anyhow!("could not extract capture"))?
                     .as_str();
 
                 let key = capture
                     .get(1)
-                    .ok_or_else(|| format_err!("could not extract capture"))?
+                    .ok_or_else(|| anyhow!("could not extract capture"))?
                     .as_str()
                     .trim()
                     .to_string();
 
-                let uncrypted_key = self.keymap.decrypt_to_string(&key).context(format_err!(
+                let uncrypted_key = self.keymap.decrypt_to_string(&key).context(anyhow!(
                     "template requires the key \"{}\", but it's not possible to decrypt the key",
                     key.clone()
                 ))?;

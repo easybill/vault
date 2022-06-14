@@ -1,5 +1,4 @@
-use failure::Error;
-use failure::ResultExt;
+use anyhow::{anyhow, Context, Error};
 use key::Pem;
 use key::PublicKey;
 use openssl::rand::rand_bytes;
@@ -84,7 +83,7 @@ impl Crypto {
         let cipher = Cipher::aes_256_cbc();
 
         if crypted_vault_file.get_secret_content().len() < 128 / 8 {
-            return Err(format_err!(
+            return Err(anyhow!(
                 "crypted size is to small, couldnt read enought for IV"
             ));
         }
@@ -101,7 +100,7 @@ impl Crypto {
 
     pub fn key_encrypt(public_key: &PublicKey, data: &[u8]) -> Result<Vec<u8>, Error> {
         let rsa = ::openssl::rsa::Rsa::public_key_from_pem(public_key.get_data())
-            .context(format_err!("invalid public key {}", &public_key.get_name()))?;
+            .context(anyhow!("invalid public key {}", &public_key.get_name()))?;
 
         //let rsa = Rsa::public_key_from_pem(&self.public_key).map_err(|_| { "invalid public key".to_string() })?;
         let mut encrypted_data: Vec<u8> = vec![0; rsa.size() as usize];
@@ -109,7 +108,7 @@ impl Crypto {
         // look at http://php.net/manual/de/function.openssl-public-encrypt.php
         let _ = rsa
             .public_encrypt(&data, encrypted_data.as_mut_slice(), Padding::PKCS1)
-            .context(format_err!("could not encrypt"))?;
+            .context(anyhow!("could not encrypt"))?;
 
         Ok(encrypted_data)
     }

@@ -1,8 +1,7 @@
 use byteorder::ByteOrder;
 use byteorder::{BigEndian, WriteBytesExt};
 use crypto::CryptedFileContent;
-use failure::Error;
-use failure::ResultExt;
+use anyhow::{anyhow, Context, Error};
 use std::io::Read;
 use std::io::Write;
 
@@ -55,13 +54,13 @@ impl VaultFile {
         let magic_byte: u16 = BigEndian::read_u16(&header_buffer[0..2]);
 
         if magic_byte != VAULT_MAGIC_BYTE {
-            return Err(format_err!("invalid file, magic byte is wrong."));
+            return Err(anyhow!("invalid file, magic byte is wrong."));
         }
 
         let version: u16 = BigEndian::read_u16(&header_buffer[2..4]);
 
         if version != 1 {
-            return Err(format_err!("version is not supported."));
+            return Err(anyhow!("version is not supported."));
         }
 
         let keyfile_size = BigEndian::read_u64(&header_buffer[4..12]) as usize;
@@ -69,7 +68,7 @@ impl VaultFile {
 
         if keyfile_size > 50_000 || secret_bytes_size > 1_000_000_000 {
             // ensure nobody kills us with a wrong vault file :)
-            return Err(format_err!("keysize is not supported."));
+            return Err(anyhow!("keysize is not supported."));
         }
 
         let mut keyfile_content = vec![0; keyfile_size];
@@ -95,17 +94,17 @@ impl VaultFile {
 
     pub fn write(&self, mut to: impl Write) -> Result<(), Error> {
         to.write_u16::<BigEndian>(VAULT_MAGIC_BYTE)
-            .context(format_err!("could not write magic byte"))?;
+            .context(anyhow!("could not write magic byte"))?;
         to.write_u16::<BigEndian>(1)
-            .context(format_err!("could not write version"))?;
+            .context(anyhow!("could not write version"))?;
         to.write_u64::<BigEndian>(self.keyfile_content.len() as u64)
-            .context(format_err!("could not write keyfile"))?;
+            .context(anyhow!("could not write keyfile"))?;
         to.write_u64::<BigEndian>(self.secret_content.len() as u64)
-            .context(format_err!("could not write secret"))?;
+            .context(anyhow!("could not write secret"))?;
         to.write_all(&self.keyfile_content)
-            .context(format_err!("could not write keyfile content"))?;
+            .context(anyhow!("could not write keyfile content"))?;
         to.write_all(&self.secret_content)
-            .context(format_err!("could not write secret content"))?;
+            .context(anyhow!("could not write secret content"))?;
 
         Ok(())
     }
