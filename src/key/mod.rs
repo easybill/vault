@@ -1,6 +1,6 @@
+use anyhow::{anyhow, Context, Error};
 use std::fs::File;
 use std::io::Read;
-use anyhow::{anyhow, Context, Error};
 
 pub mod key_map;
 
@@ -72,10 +72,7 @@ impl PublicKey {
                 };
 
                 if !filename.ends_with(".pub.pem") {
-                    return Err(anyhow!(
-                        "public key '{}' does not end with .pub.pem",
-                        path
-                    ));
+                    return Err(anyhow!("public key '{}' does not end with .pub.pem", path));
                 }
 
                 filename[..filename.len() - 8].to_string()

@@ -1,6 +1,6 @@
+use anyhow::{anyhow, Context, Error};
 use fs;
 use std::path::Path;
-use anyhow::{anyhow, Context, Error};
 
 pub struct Filesystem;
 

@@ -1,7 +1,7 @@
+use anyhow::{anyhow, Context, Error};
 use byteorder::ByteOrder;
 use byteorder::{BigEndian, WriteBytesExt};
 use crypto::CryptedFileContent;
-use anyhow::{anyhow, Context, Error};
 use std::io::Read;
 use std::io::Write;
 

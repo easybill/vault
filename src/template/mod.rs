@@ -15,15 +15,13 @@ impl<'a> Template<'a> {
 
     pub fn parse_from_file(&self, filename: &str) -> Result<String, Error> {
         let mut file_content = {
-            let mut f = File::open(filename)
-                .context(anyhow!("could not open tempalte {}.", &filename))?;
+            let mut f =
+                File::open(filename).context(anyhow!("could not open tempalte {}.", &filename))?;
 
             let mut buffer = String::new();
 
-            f.read_to_string(&mut buffer).context(anyhow!(
-                "could not read content of template {}",
-                &filename
-            ))?;
+            f.read_to_string(&mut buffer)
+                .context(anyhow!("could not read content of template {}", &filename))?;
 
             buffer
         };

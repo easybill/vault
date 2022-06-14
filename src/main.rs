@@ -6,10 +6,10 @@ extern crate clap;
 extern crate regex;
 #[macro_use]
 extern crate byteorder;
-extern crate dirs;
 extern crate anyhow;
+extern crate dirs;
 
-use anyhow::{anyhow, Context, Error, format_err};
+use anyhow::{anyhow, format_err, Context, Error};
 
 use clap::{App, Arg, SubCommand};
 

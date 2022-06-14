@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Context, Error};
 use crypto::Crypto;
 use crypto::UncryptedVaultFile;
 use key::Pem;
@@ -7,7 +8,6 @@ use proto::VaultFile;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
-use anyhow::{anyhow, Context, Error};
 use std::io::Read;
 use std::path::Path;
 use toml;
@@ -264,8 +264,7 @@ impl KeyMap {
             .decrypt(&subscription_key)
             .context(anyhow!("could not decrypt {}", subscription_key))?;
 
-        Ok(String::from_utf8(decrypted.get_content().to_vec())
-            .context(anyhow!("Invalid Utf8"))?)
+        Ok(String::from_utf8(decrypted.get_content().to_vec()).context(anyhow!("Invalid Utf8"))?)
     }
     pub fn decrypt(&self, subscription_key: &str) -> Result<UncryptedVaultFile, Error> {
         let possible_files: Vec<String> = {
@@ -329,16 +328,11 @@ impl KeyMap {
         self.decrypt_subscription(subscription).is_ok()
     }
 
-    pub fn fulfill_subscription(
-        &self,
-        subscription: &Subscription,
-    ) -> Result<(), Error> {
-        let uncrypted_vault_file = self
-            .decrypt_subscription(subscription)
-            .context(anyhow!(
-                "could not decrypt subscription {}.",
-                subscription.get_name()
-            ))?;
+    pub fn fulfill_subscription(&self, subscription: &Subscription) -> Result<(), Error> {
+        let uncrypted_vault_file = self.decrypt_subscription(subscription).context(anyhow!(
+            "could not decrypt subscription {}.",
+            subscription.get_name()
+        ))?;
 
         let public_keys_for_user: &Vec<PublicKey> = {
             let mut keys = None;
@@ -413,9 +407,10 @@ impl KeyMap {
     }
 
     pub fn add_new_secet(&self, filepath: &str) -> Result<(), Error> {
-        let pem = self.get_private_pems().first().ok_or_else(|| {
-            anyhow!("you've no private key, no idea how to crypt {}", filepath)
-        })?;
+        let pem = self
+            .get_private_pems()
+            .first()
+            .ok_or_else(|| anyhow!("you've no private key, no idea how to crypt {}", filepath))?;
 
         let file_content = {
             let mut f = File::open(filepath).context(anyhow!("could not open {}", filepath))?;
@@ -438,8 +433,7 @@ impl KeyMap {
 
         fs::remove_file(filepath).context(anyhow!("could not remove file {}", filepath))?;
 
-        fs::create_dir(filepath)
-            .context(anyhow!("could not create new directory {}", filepath))?;
+        fs::create_dir(filepath).context(anyhow!("could not create new directory {}", filepath))?;
 
         let new_filename = format!("{}/{}.crypt", filepath, pem.get_name());
 
