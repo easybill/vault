@@ -8,6 +8,7 @@ extern crate regex;
 extern crate byteorder;
 extern crate anyhow;
 extern crate dirs;
+extern crate globset;
 
 use anyhow::{anyhow, format_err, Context, Error};
 

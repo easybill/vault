@@ -5,11 +5,12 @@ use key::Pem;
 use key::PrivateKey;
 use key::PublicKey;
 use proto::VaultFile;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::fs::File;
+use std::fs::{File, FileType};
 use std::io::Read;
 use std::path::Path;
+use globset::Glob;
 use toml;
 
 #[derive(Debug)]
@@ -79,13 +80,65 @@ impl KeyMap {
         Ok(buffer)
     }
 
+    pub fn get_subsciptions(
+        config: &ConfigToml,
+    ) -> Result<Vec<String>, ::anyhow::Error> {
+        // read the content of ./.vault/secrets/ to find secrets that are matching a glob pattern.
+        let available_secrets = {
+            let mut buffer = vec![];
+            let secrets_dir_entries = fs::read_dir("./.vault/secrets/").context("could not read ./.vault/secrets/")?;
+            for secrets_dir_entry in secrets_dir_entries {
+                let entry = secrets_dir_entry
+                    .context("could not get directory item in ./.vault/secrets/")?;
+
+                if !entry.file_type().context("could not read filetype of secret")?.is_dir() {
+                    continue;
+                }
+
+                let path_as_string = entry.path().display().to_string();
+
+                if path_as_string.ends_with(".crypt") {
+                    continue;
+                }
+
+                let filename = match entry.file_name().to_str() {
+                    None => return Err(anyhow!("invalid filename encoding in entry in ./.vault/secrets/")),
+                    Some(s) => s.to_string(),
+                };
+
+                buffer.push(filename);
+            }
+
+            buffer
+        };
+
+        let mut buffer = HashSet::new();
+        for raw_subscription in &config.subscriptions {
+            if !raw_subscription.contains("*") {
+                buffer.insert(raw_subscription.to_string());
+            }
+
+            // we've a glob pattern...
+            let glob_matcher = Glob::new(raw_subscription).context(format!("error when compiling glob pattern {}", raw_subscription))?.compile_matcher();
+            for available_secret in available_secrets.iter() {
+                if !glob_matcher.is_match(available_secret) {
+                    continue;
+                }
+
+                buffer.insert(available_secret.to_string());
+            }
+        }
+
+        Ok(buffer.into_iter().collect::<Vec<_>>())
+    }
+
     pub fn build_subscriptions(
         username: &str,
         config: &ConfigToml,
-    ) -> HashMap<String, Subscription> {
+    ) -> Result<HashMap<String, Subscription>, ::anyhow::Error> {
         let mut buffer = HashMap::new();
 
-        for raw_subscription in &config.subscriptions {
+        for raw_subscription in Self::get_subsciptions(&config).context("could not get subscriptions")? {
             let secret_path = format!("./.vault/secrets/{}/{}.crypt", &raw_subscription, username);
 
             let file_exists = match fs::metadata(&secret_path) {
@@ -105,7 +158,7 @@ impl KeyMap {
 
         // todo, später muss ich die subscriptions nicht nur aus der config lesen, sondern zusätzlich im dateisystem nachsehen.
 
-        buffer
+        Ok(buffer)
     }
 
     pub fn build_private_pems(config: &KeyMapConfig) -> Result<Vec<Pem>, Error> {
@@ -238,7 +291,7 @@ impl KeyMap {
 
             buffer.push(KeyMapEntry {
                 user: user.clone(),
-                subscriptions: Self::build_subscriptions(&user, &decoded_config_file),
+                subscriptions: Self::build_subscriptions(&user, &decoded_config_file).context("could not fetch subscriptions")?,
                 keys: Self::build_keys_from_path(&user_path)?,
             });
         }
