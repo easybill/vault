@@ -40,10 +40,11 @@ fn test_integration_decode_old_version() {
     cmd(".", "cargo", &["build"], false);
 
     cmd(".", "rm", &["-rf", VAULT_INTEGRATION_TEST_DIR], false);
-    cmd(".", "mkdir", &["-p", &format!("{}/.vault", VAULT_INTEGRATION_TEST_DIR)], false);
+    cmd(".", "mkdir", &["-p", &format!("{}", VAULT_INTEGRATION_TEST_DIR)], false);
 
     cmd(".", "cp", &["./target/debug/vault", &format!("{}/vault", VAULT_INTEGRATION_TEST_DIR)], false);
-    cmd(".", "cp", &["-r", "./fixtures/", &format!("{}/.vault", VAULT_INTEGRATION_TEST_DIR)], false);
+    cmd(".", "cp", &["-r", "./fixtures", VAULT_INTEGRATION_TEST_DIR], false);
+    cmd(VAULT_INTEGRATION_TEST_DIR, "mv", &["./fixtures", ".vault"], false);
 
     cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah"], false);
     cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah", "./.vault"], false);
