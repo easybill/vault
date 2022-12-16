@@ -1,6 +1,6 @@
 [package]
 name = "vault"
-version = "1.0.7"
+version = "1.0.10"
 authors = ["timglabisch <glabisch@easybill.de>"]
 
 [dependencies]
