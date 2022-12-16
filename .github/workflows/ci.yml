@@ -19,11 +19,11 @@ jobs:
       matrix:
         platform:
           # mac target
-          - { os: 'macos-latest', target: 'x86_64-apple-darwin', arch: 'x86_64', osn: 'mac' }
-          - { os: 'macos-latest', target: 'aarch64-apple-darwin', arch: 'aarch64', osn: 'mac' }
+          - { os: 'macos-latest', target: 'x86_64-apple-darwin', arch: 'x86_64', osn: 'mac', tests_integration: true }
+          - { os: 'macos-latest', target: 'aarch64-apple-darwin', arch: 'aarch64', osn: 'mac', tests_integration: false }
           # linux target
-          - { os: 'ubuntu-latest', target: 'x86_64-unknown-linux-musl', arch: 'x86_64', osn: 'ubuntu-latest' }
-          - { os: 'ubuntu-latest', target: 'aarch64-unknown-linux-musl', arch: 'aarch64', osn: 'ubuntu-latest' }
+          - { os: 'ubuntu-latest', target: 'x86_64-unknown-linux-musl', arch: 'x86_64', osn: 'ubuntu-latest', tests_integration: true }
+          - { os: 'ubuntu-latest', target: 'aarch64-unknown-linux-musl', arch: 'aarch64', osn: 'ubuntu-latest', tests_integration: true }
     steps:
       - name: Set output
         id: vars
@@ -39,6 +39,7 @@ jobs:
           use-cross: true
           command: test
           args: --target ${{ matrix.platform.target }} --bin vault
+        if: "${{ matrix.platform.tests_integration }} == true"
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
