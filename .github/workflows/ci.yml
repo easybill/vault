@@ -38,7 +38,7 @@ jobs:
         with:
           use-cross: true
           command: test
-          args: [ ]
+          args: --target ${{ matrix.platform.target }} --bin vault
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
