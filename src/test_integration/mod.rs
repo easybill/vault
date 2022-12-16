@@ -51,7 +51,7 @@ fn test_integration_decode_old_version() {
 
     for valid_secret in &valid_secrets {
         println!("checking {}", valid_secret);
-        let content = cmd(VAULT_INTEGRATION_TEST_DIR, "vault", &["get", valid_secret], true);
+        let content = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["get", valid_secret], true);
         assert_eq!(format!("{}_CONTENT", valid_secret).into_bytes(), content);
     }
 
@@ -71,7 +71,7 @@ fn test_integration_decode_old_version() {
     let mut file = File::create(format!("{}/example_template.vault", VAULT_INTEGRATION_TEST_DIR)).expect("could not create template");
     file.write_all(template.as_bytes()).expect("could not write template");
 
-    let template_output = cmd(VAULT_INTEGRATION_TEST_DIR, "vault", &["template", "example_template.vault"], true);
+    let template_output = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["template", "example_template.vault"], true);
     // println!("Template1: {}", String::from_utf8_lossy(&template_output));
     // println!("Template2: {}", &expected_template);
     assert_eq!(expected_template.into_bytes(), template_output);
