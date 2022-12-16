@@ -38,7 +38,7 @@ jobs:
         with:
           use-cross: true
           command: test
-          args: -- --nocapture
+          args: [ ]
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
