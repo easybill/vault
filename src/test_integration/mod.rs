@@ -33,7 +33,7 @@ fn cmd<T>(dir: T, command: T, args : &[&str], capture_output: bool) -> Vec<u8> w
 #[test]
 fn test_integration_decode_old_version() {
 
-    cmd(".", "cargo", &["build"], false);
+    // cmd(".", "cargo", &["build"], false);
 
     cmd(".", "rm", &["-rf", VAULT_INTEGRATION_TEST_DIR], false);
     cmd(".", "mkdir", &["-p", &format!("{}/.vault", VAULT_INTEGRATION_TEST_DIR)], false);
