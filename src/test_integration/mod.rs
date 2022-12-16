@@ -26,7 +26,7 @@ fn cmd<T>(dir: T, command: T, args : &[&str], capture_output: bool) -> Vec<u8> w
         ;
 
     if !output.status.success() {
-        println!("Command with invalid Status Code: {} {:?}", &command_str, args);
+        println!("Command with invalid Status Code: {} {:?}\n{:?}", &command_str, args, output);
     }
 
     assert_eq!(true, output.status.success());
