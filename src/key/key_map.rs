@@ -141,6 +141,10 @@ impl KeyMap {
                 }
 
                 if !path_as_string.ends_with(".pem") {
+                    // by default the directory is empty. its annoying when you get this error everytime.
+                    if (path_as_string.ends_with(".gitkeep")) {
+                        continue;
+                    }
                     eprintln!("info: unexpected file {}", &path_as_string);
                     continue;
                 }
