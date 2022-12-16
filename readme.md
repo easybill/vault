@@ -40,7 +40,7 @@ just add the secret in the file
 ./vault/keys/[USER]/config.toml as a subscription
 ```
 subscriptions = [
-    "MY_NEW_SECRET",
+    "MY_NEW_SECRET", // Glob patterns are supported. e. g. DEV*
 ]
 ```
  
