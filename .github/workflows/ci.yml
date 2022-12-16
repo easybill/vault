@@ -38,6 +38,11 @@ jobs:
         with:
           use-cross: true
           command: build
+          args: test -- --nocapture
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
           args: --release --target ${{ matrix.platform.target }} --bin vault
       - name: mv artifacts
         run: |

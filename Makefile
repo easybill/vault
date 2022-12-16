@@ -5,3 +5,6 @@ build: build-linux
 
 clippy:
 	cargo clippy
+
+test:
+	cargo test -- --nocapture

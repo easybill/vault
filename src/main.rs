@@ -28,6 +28,7 @@ mod key;
 mod proto;
 mod template;
 mod ui;
+mod test_integration;
 
 fn main() {
     if let Err(err) = run_main() {
