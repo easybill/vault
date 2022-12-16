@@ -52,21 +52,19 @@ jobs:
           mkdir -p artifact
           cp target/${{ matrix.platform.target }}/release/vault artifact/vault-${{ env.RELEASE_VERSION }}-${{ matrix.platform.target }}
           cp target/${{ matrix.platform.target }}/release/vault artifact/vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
+        if: startsWith(github.ref, 'refs/tags/')
       - name: Prepare output artifact for next step
         uses: actions/upload-artifact@v3
         with:
           name: vault-${{ env.RELEASE_VERSION }}-${{ matrix.platform.target }}
           path: artifact/vault-${{ env.RELEASE_VERSION }}-${{ matrix.platform.target }}
+        if: startsWith(github.ref, 'refs/tags/')
       - name: Prepare output artifact for next step
         uses: actions/upload-artifact@v3
         with:
           name: vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
           path: artifact/vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
-      - name: Prepare output artifact for next step
-        uses: actions/upload-artifact@v3
-        with:
-          name: vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
-          path: artifact/vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
+        if: startsWith(github.ref, 'refs/tags/')
 
   release:
     runs-on: 'ubuntu-latest'
