@@ -9,6 +9,7 @@ extern crate byteorder;
 extern crate anyhow;
 extern crate dirs;
 extern crate globset;
+extern crate self_update;
 
 use anyhow::{anyhow, format_err, Context, Error};
 
@@ -20,6 +21,7 @@ use key::key_map::KeyMap;
 use key::key_map::KeyMapConfig;
 use openssl::rsa::Rsa;
 use std::fs;
+use self_update::cargo_crate_version;
 use template::Template;
 use ui::question::Question;
 
@@ -40,7 +42,7 @@ fn main() {
 
 fn run_main() -> Result<(), Error> {
     let matches = App::new("Vault")
-        .version("1.0")
+        .version(cargo_crate_version!())
         .subcommand(
             SubCommand::with_name("get").arg(
                 Arg::with_name("key")
@@ -55,6 +57,17 @@ fn run_main() -> Result<(), Error> {
                 .arg(
                     Arg::with_name("username")
                         .required(true)
+                        .takes_value(true)
+                        .help("lists test values"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("update")
+                .about("updates vault")
+                .arg(
+                    Arg::with_name("current_version")
+                        .default_value(cargo_crate_version!())
+                        .required(false)
                         .takes_value(true)
                         .help("lists test values"),
                 ),
@@ -92,6 +105,19 @@ fn run_main() -> Result<(), Error> {
     let mut keymap = KeyMap::from_path(&KeyMapConfig {
         path_private_key: path_private_key.clone(),
     })?;
+
+    if let Some(matches) = matches.subcommand_matches("update") {
+        let status = self_update::backends::github::Update::configure()
+            .repo_owner("easybill")
+            .repo_name("vault")
+            .bin_name("vault")
+            .show_download_progress(true)
+            .current_version(matches.value_of("current_version").expect("current version has a default"))
+            .build()?
+            .update()?;
+        println!("Update status: `{}`!", status.version());
+        return Ok(())
+    }
 
     // You can check the value provided by positional arguments, or option arguments
     if let Some(matches) = matches.subcommand_matches("get") {

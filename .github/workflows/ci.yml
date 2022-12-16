@@ -28,6 +28,8 @@ jobs:
       - name: Set output
         id: vars
         run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
@@ -52,7 +54,7 @@ jobs:
       - name: Prepare output artifact for next step
         uses: actions/upload-artifact@v3
         with:
-          name: vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
+          name: vault-${{ env.RELEASE_VERSION }}-${{ matrix.platform.target }}
           path: artifact/vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
 
   release:

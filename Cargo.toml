@@ -1,6 +1,6 @@
 [package]
 name = "vault"
-version = "0.1.0"
+version = "1.0.7"
 authors = ["timglabisch <glabisch@easybill.de>"]
 
 [dependencies]
@@ -14,3 +14,4 @@ anyhow = "1.0.*"
 byteorder = "1.4.*"
 dirs = "4.0.*"
 globset = "0.4.*"
+self_update = "0.*"
