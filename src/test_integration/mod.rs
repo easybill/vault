@@ -33,19 +33,12 @@ fn cmd<T>(dir: T, command: T, args : &[&str], capture_output: bool) -> Vec<u8> w
 #[test]
 fn test_integration_decode_old_version() {
 
-    // cmd(".", "cargo", &["build"], false);
+    cmd(".", "cargo", &["build"], false);
 
     cmd(".", "rm", &["-rf", VAULT_INTEGRATION_TEST_DIR], false);
     cmd(".", "mkdir", &["-p", &format!("{}/.vault", VAULT_INTEGRATION_TEST_DIR)], false);
 
-    let self_path = {
-        let current_exe = ::std::env::current_exe();
-        let current_exe = current_exe.expect("could not get self ...");
-        let str = current_exe.to_str().expect("invalid path");
-        str.to_string()
-    };
-
-    cmd(".", "cp", &[&self_path, &format!("{}/vault", VAULT_INTEGRATION_TEST_DIR)], false);
+    cmd(".", "cp", &["./target/debug/vault", &format!("{}/vault", VAULT_INTEGRATION_TEST_DIR)], false);
     cmd(".", "cp", &["-r", "./fixtures/", &format!("{}/.vault", VAULT_INTEGRATION_TEST_DIR)], false);
 
     cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah"], false);
@@ -58,7 +51,7 @@ fn test_integration_decode_old_version() {
 
     for valid_secret in &valid_secrets {
         println!("checking {}", valid_secret);
-        let content = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["get", valid_secret], true);
+        let content = cmd(VAULT_INTEGRATION_TEST_DIR, "vault", &["get", valid_secret], true);
         assert_eq!(format!("{}_CONTENT", valid_secret).into_bytes(), content);
     }
 
@@ -78,7 +71,7 @@ fn test_integration_decode_old_version() {
     let mut file = File::create(format!("{}/example_template.vault", VAULT_INTEGRATION_TEST_DIR)).expect("could not create template");
     file.write_all(template.as_bytes()).expect("could not write template");
 
-    let template_output = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["template", "example_template.vault"], true);
+    let template_output = cmd(VAULT_INTEGRATION_TEST_DIR, "vault", &["template", "example_template.vault"], true);
     // println!("Template1: {}", String::from_utf8_lossy(&template_output));
     // println!("Template2: {}", &expected_template);
     assert_eq!(expected_template.into_bytes(), template_output);
