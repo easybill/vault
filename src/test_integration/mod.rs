@@ -25,6 +25,10 @@ fn cmd<T>(dir: T, command: T, args : &[&str], capture_output: bool) -> Vec<u8> w
         .expect(&format!("Failed to execute #1 {} {:?}", &command_str, args))
         ;
 
+    if !output.status.success() {
+        println!("Command with invalid Status Code: {} {:?}", &command_str, args);
+    }
+
     assert_eq!(true, output.status.success());
 
     output.stdout
