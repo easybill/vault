@@ -38,7 +38,14 @@ fn test_integration_decode_old_version() {
     cmd(".", "rm", &["-rf", VAULT_INTEGRATION_TEST_DIR], false);
     cmd(".", "mkdir", &["-p", &format!("{}/.vault", VAULT_INTEGRATION_TEST_DIR)], false);
 
-    cmd(".", "cp", &["./target/debug/vault", &format!("{}/vault", VAULT_INTEGRATION_TEST_DIR)], false);
+    let self_path = {
+        let current_exe = ::std::env::current_exe();
+        let current_exe = current_exe.expect("could not get self ...");
+        let str = current_exe.to_str().expect("invalid path");
+        str.to_string()
+    };
+
+    cmd(".", "cp", &[&self_path, &format!("{}/vault", VAULT_INTEGRATION_TEST_DIR)], false);
     cmd(".", "cp", &["-r", "./fixtures/", &format!("{}/.vault", VAULT_INTEGRATION_TEST_DIR)], false);
 
     cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah"], false);
