@@ -46,6 +46,7 @@ fn test_integration_decode_old_version() {
     cmd(".", "cp", &["-r", "./fixtures/", &format!("{}/.vault", VAULT_INTEGRATION_TEST_DIR)], false);
 
     cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah"], false);
+    cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah", "./.vault"], false);
 
     // check if we could extract VERSION_1_0_0_SECRET
 
