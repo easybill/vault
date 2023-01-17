@@ -2,7 +2,13 @@
 
 Smart and easy way to share secrets in repositories.
 
-### Download
+## Install with [cargo](https://doc.rust-lang.org/stable/cargo/getting-started/installation.html)
+
+```
+cargo install --git https://github.com/easybill/vault.git
+```
+
+## Download
 You can download the latest binaries from the [releases page](https://github.com/easybill/vault/releases) or use these permalinks for the latest version:
 - [vault_linux_latest_x86_64](https://github.com/easybill/vault/releases/latest/download/vault_ubuntu-latest_x86_64)
 - [vault_linux_latest_aarch64](https://github.com/easybill/vault/releases/latest/download/vault_ubuntu-latest_aarch64)
