@@ -5,13 +5,13 @@ authors = ["timglabisch <glabisch@easybill.de>"]
 
 [dependencies]
 openssl = {version = "0.10.*", features = ["vendored"]}
-toml = "0.5.*"
+toml = "0.*"
 serde_derive = "*"
 serde = "*"
 clap = "4.*"
-regex = "1.7.*"
+regex = "1.*"
 anyhow = "1.0.*"
 byteorder = "1.4.*"
-dirs = "4.0.*"
+dirs = "5.*"
 globset = "0.4.*"
 self_update = "0.*"
