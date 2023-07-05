@@ -13,7 +13,7 @@ extern crate self_update;
 
 use anyhow::{anyhow, format_err, Context, Error};
 
-use clap::{App, Arg, SubCommand};
+use clap::{Arg};
 
 use filesystem::Filesystem;
 use filesystem::FilesystemCheckResult;
@@ -21,6 +21,7 @@ use key::key_map::KeyMap;
 use key::key_map::KeyMapConfig;
 use openssl::rsa::Rsa;
 use std::fs;
+use std::process::Command;
 use self_update::cargo_crate_version;
 use template::Template;
 use ui::question::Question;
@@ -41,44 +42,40 @@ fn main() {
 }
 
 fn run_main() -> Result<(), Error> {
-    let matches = App::new("Vault")
+    let matches = ::clap::Command::new("Vault")
         .version(cargo_crate_version!())
         .subcommand(
-            SubCommand::with_name("get").arg(
-                Arg::with_name("key")
+            ::clap::Command::new("get").arg(
+                Arg::new("key")
                     .required(true)
-                    .takes_value(true)
                     .help("lists test values"),
             ),
         )
         .subcommand(
-            SubCommand::with_name("create-openssl-key")
+            ::clap::Command::new("create-openssl-key")
                 .about("does testing things")
                 .arg(
-                    Arg::with_name("username")
+                    Arg::new("username")
                         .required(true)
-                        .takes_value(true)
                         .help("lists test values"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("update")
+            ::clap::Command::new("update")
                 .about("updates vault")
                 .arg(
-                    Arg::with_name("current_version")
+                    Arg::new("current_version")
                         .default_value(cargo_crate_version!())
                         .required(false)
-                        .takes_value(true)
                         .help("lists test values"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("template")
+            ::clap::Command::new("template")
                 .about("does testing things")
                 .arg(
-                    Arg::with_name("filename")
+                    Arg::new("filename")
                         .required(true)
-                        .takes_value(true)
                         .help("lists test values"),
                 ),
         )
@@ -112,7 +109,7 @@ fn run_main() -> Result<(), Error> {
             .repo_name("vault")
             .bin_name("vault")
             .show_download_progress(true)
-            .current_version(matches.value_of("current_version").expect("current version has a default"))
+            .current_version(matches.get_one::<String>("current_version").expect("current version has a default"))
             .build()?
             .update()?;
         println!("Update status: `{}`!", status.version());
@@ -121,7 +118,7 @@ fn run_main() -> Result<(), Error> {
 
     // You can check the value provided by positional arguments, or option arguments
     if let Some(matches) = matches.subcommand_matches("get") {
-        let key = matches.value_of("key").expect("key must exists");
+        let key = matches.get_one::<String>("key").expect("key must exists");
 
         match keymap.decrypt(&key) {
             Ok(k) => {
@@ -137,7 +134,7 @@ fn run_main() -> Result<(), Error> {
     }
 
     if let Some(matches) = matches.subcommand_matches("create-openssl-key") {
-        let username = matches.value_of("username").expect("username must exists");
+        let username = matches.get_one::<String>("username").expect("username must exists");
 
         create_keys(username)?;
 
@@ -145,7 +142,7 @@ fn run_main() -> Result<(), Error> {
     }
 
     if let Some(matches) = matches.subcommand_matches("template") {
-        let filename = matches.value_of("filename").expect("filename must exists");
+        let filename = matches.get_one::<String>("filename").expect("filename must exists");
 
         let template = Template::new(&keymap);
         match template.parse_from_file(filename) {

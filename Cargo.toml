@@ -8,7 +8,7 @@ openssl = {version = "0.10.*", features = ["vendored"]}
 toml = "0.5.*"
 serde_derive = "*"
 serde = "*"
-clap = "3.*"
+clap = "4.*"
 regex = "1.7.*"
 anyhow = "1.0.*"
 byteorder = "1.4.*"
