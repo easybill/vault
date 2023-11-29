@@ -36,7 +36,7 @@ vault
 press y and your secret is encrypted.
 
 # get the secret
-cargo get MY_NEW_SECRET # prints "this is secret"
+vault get MY_NEW_SECRET # prints "this is secret"
 ```
 
 ### Sharing the Secret
