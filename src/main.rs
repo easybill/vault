@@ -85,11 +85,6 @@ fn run_main() -> Result<(), Error> {
         .subcommand(
             ::clap::Command::new("rotate")
                 .about("rotated the private key")
-                .arg(
-                    Arg::new("filename")
-                        .required(false)
-                        .help("rotate the private key"),
-                ),
         )
         .get_matches();
 
@@ -171,8 +166,7 @@ fn run_main() -> Result<(), Error> {
     }
 
     if let Some(matches) = matches.subcommand_matches("rotate") {
-        let private_key_name = matches.get_one::<String>("filename").map(|x|x.clone());
-        rotate_keys(&KeyMapConfig { path_private_key }, private_key_name)?;
+        rotate_keys(&KeyMapConfig { path_private_key })?;
         return Ok(());
     }
 

@@ -209,6 +209,11 @@ impl KeyMap {
                     if (path_as_string.ends_with(".gitkeep")) {
                         continue;
                     }
+
+                    if (path_as_string.ends_with(".bak")) {
+                        continue;
+                    }
+
                     eprintln!("info: unexpected file {}", &path_as_string);
                     continue;
                 }

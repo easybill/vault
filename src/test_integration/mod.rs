@@ -49,7 +49,7 @@ fn test_prepare() {
     cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah", "./.vault"], false);
 }
 
-// #[test]
+#[test]
 fn test_integration_decode_old_version() {
     test_prepare();
 
@@ -92,7 +92,17 @@ fn test_integration_rotate_key() {
     test_prepare();
 
     let content = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["rotate"], true);
-
     println!("output: {}", String::from_utf8_lossy(&content));
+
+    fn assert_secret() {
+        assert_eq!("VERSION_1_0_0_SECRET_CONTENT", String::from_utf8_lossy(&cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["get", "VERSION_1_0_0_SECRET"], true)))
+    }
+
+
+    //cmd(VAULT_INTEGRATION_TEST_DIR, "mv", &["./.vault/private_keys/testuser.pem", "./.vault/private_keys/testuser.pem.bak"], false);
+    //cmd(VAULT_INTEGRATION_TEST_DIR, "mv", &["./.vault/private_keys/testuser.pub.pem", "./.vault/private_keys/testuser.pub.pem.bak"], false);
+
+    assert_secret();
+
 
 }
