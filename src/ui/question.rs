@@ -27,6 +27,11 @@ impl Question {
     }
 
     pub fn confirm(question: &str) -> bool {
+
+        if std::env::vars().find(|x|x == &("VAULT_FORCE_YES".to_string(), "1".to_string())).is_some() {
+            return true;
+        }
+
         loop {
             match Self::ask(&format!("{} (y/n)", question))
                 .trim()

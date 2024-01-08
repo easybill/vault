@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Error};
-use crypto::Crypto;
+use crypto::{CryptedFileContent, Crypto};
 use crypto::UncryptedVaultFile;
 use key::Pem;
 use key::PrivateKey;
@@ -45,6 +45,17 @@ pub struct KeyMapConfig {
 }
 
 impl Subscription {
+    pub fn new(
+        username: String,
+        name: String,
+        is_stisfied: bool,
+    ) -> Self {
+        Self {
+            username,
+            name,
+            is_stisfied
+        }
+    }
     pub fn get_username(&self) -> &str {
         &self.username
     }

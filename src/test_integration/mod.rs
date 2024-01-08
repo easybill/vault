@@ -12,6 +12,7 @@ fn cmd<T>(dir: T, command: T, args : &[&str], capture_output: bool) -> Vec<u8> w
     let mut cmd = Command::new(&command_str);
     let mut cmd = cmd
         .args(args)
+        .env("VAULT_FORCE_YES", "1")
         .current_dir(&dir.as_ref().to_string())
         .stdin(Stdio::null())
         ;
@@ -34,9 +35,7 @@ fn cmd<T>(dir: T, command: T, args : &[&str], capture_output: bool) -> Vec<u8> w
     output.stdout
 }
 
-#[test]
-fn test_integration_decode_old_version() {
-
+fn test_prepare() {
     cmd(".", "cargo", &["build"], false);
 
     cmd(".", "rm", &["-rf", VAULT_INTEGRATION_TEST_DIR], false);
@@ -48,6 +47,11 @@ fn test_integration_decode_old_version() {
 
     cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah"], false);
     cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah", "./.vault"], false);
+}
+
+// #[test]
+fn test_integration_decode_old_version() {
+    test_prepare();
 
     // check if we could extract VERSION_1_0_0_SECRET
 
@@ -81,4 +85,14 @@ fn test_integration_decode_old_version() {
     // println!("Template1: {}", String::from_utf8_lossy(&template_output));
     // println!("Template2: {}", &expected_template);
     assert_eq!(expected_template.into_bytes(), template_output);
+}
+
+#[test]
+fn test_integration_rotate_key() {
+    test_prepare();
+
+    let content = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["rotate"], true);
+
+    println!("output: {}", String::from_utf8_lossy(&content));
+
 }

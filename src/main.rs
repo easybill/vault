@@ -23,6 +23,8 @@ use openssl::rsa::Rsa;
 use std::fs;
 use std::process::Command;
 use self_update::cargo_crate_version;
+use key::{Pem, PrivateKey, PublicKey};
+use rotate_key::rotate_keys;
 use template::Template;
 use ui::question::Question;
 
@@ -33,6 +35,7 @@ mod proto;
 mod template;
 mod ui;
 mod test_integration;
+mod rotate_key;
 
 fn main() {
     if let Err(err) = run_main() {
@@ -77,6 +80,15 @@ fn run_main() -> Result<(), Error> {
                     Arg::new("filename")
                         .required(true)
                         .help("lists test values"),
+                ),
+        )
+        .subcommand(
+            ::clap::Command::new("rotate")
+                .about("rotated the private key")
+                .arg(
+                    Arg::new("filename")
+                        .required(false)
+                        .help("rotate the private key"),
                 ),
         )
         .get_matches();
@@ -155,6 +167,12 @@ fn run_main() -> Result<(), Error> {
             }
         }
 
+        return Ok(());
+    }
+
+    if let Some(matches) = matches.subcommand_matches("rotate") {
+        let private_key_name = matches.get_one::<String>("filename").map(|x|x.clone());
+        rotate_keys(&KeyMapConfig { path_private_key }, private_key_name)?;
         return Ok(());
     }
 
@@ -256,7 +274,8 @@ pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize, Error> {
     Ok(new_secrets_created)
 }
 
-pub fn create_keys(username: &str) -> Result<(), Error> {
+
+pub fn create_keys(username: &str) -> Result<Pem, Error> {
     use std::fs::File;
     use std::io::Write;
 
@@ -339,5 +358,14 @@ pub fn create_keys(username: &str) -> Result<(), Error> {
             .context(format_err!("could not write to {}", &private_key_path))?
     }
 
-    Ok(())
+    Ok(Pem::new(
+        PrivateKey::load_from_file(&private_key_path).context(anyhow!(
+                "failed, to add key, private key: {}",
+                &private_key_path
+            ))?,
+        PublicKey::load_from_file(&public_key_path).context(anyhow!(
+            "failed, to add key, public key: {}",
+            &public_key_path
+        ))?,
+    ))
 }
