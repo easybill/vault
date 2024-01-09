@@ -43,7 +43,7 @@ jobs:
         with:
           use-cross: true
           command: test
-          args: --target ${{ matrix.platform.target }} --bin vault --test-threads=1
+          args: --target ${{ matrix.platform.target }} --bin vault
 
       - name: Compile
         uses: clechasseur/rs-cargo@v2

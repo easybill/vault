@@ -11,6 +11,9 @@ extern crate dirs;
 extern crate globset;
 extern crate self_update;
 
+#[cfg(test)]
+extern crate serial_test;
+
 use anyhow::{anyhow, format_err, Context, Error};
 
 use clap::{Arg};
