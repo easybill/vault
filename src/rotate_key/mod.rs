@@ -8,7 +8,7 @@ use crate::key::Pem;
 use crate::ui::question::Question;
 
 pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<(), Error> {
-    
+
     let keymap = KeyMap::from_path(keymap_config)?;
 
     let pems = keymap.get_private_pems().iter().filter(|x|!x.get_name().contains("_backup_")).collect::<Vec<_>>();
@@ -22,16 +22,16 @@ pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<(), Error> {
     let username_rotated = &format!("{}_to_rotate", username_current);
 
     println!("1. generate new key");
-    create_keys(&format!("{}_to_rotate", username_current))?;
+    create_keys(&format!("{}_to_rotate", username_current)).context("create_keys")?;
 
     let keymap = KeyMap::from_path(keymap_config)?;
 
     println!("2. allow access to all keys");
-    allow_access_to_all_keys(&keymap, &username_rotated)?;
+    allow_access_to_all_keys(&keymap, &username_rotated).context("allow_access_to_all_keys")?;
     println!("2. delete the old key");
-    delete_user(username_current)?;
+    delete_user(username_current).context("delete_user")?;
     println!("3. rename user");
-    rename_user(&username_rotated, &username_current)?;
+    rename_user(&username_rotated, &username_current).context("rename_user")?;
     println!("the key has been rotated, the old key is still there and has a backup suffix. ");
 
     Ok(())
@@ -68,7 +68,7 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<(), Error> {
 
     let secret_directory_path = "./.vault/secrets/";
 
-    let secret_directory_path_readdir = fs::read_dir(&secret_directory_path).context(anyhow!(
+    let secret_directory_path_readdir = fs::read_dir(&secret_directory_path).context(format!(
         "could not read subscription path. directory is missing? {}",
         &secret_directory_path
     ))?;
@@ -115,7 +115,7 @@ fn delete_user(username: &str) -> Result<(), Error> {
 
     let secret_directory_path = "./.vault/secrets/";
 
-    let secret_directory_path_readdir = fs::read_dir(&secret_directory_path).context(anyhow!(
+    let secret_directory_path_readdir = fs::read_dir(&secret_directory_path).context(format!(
         "could not read subscription path. directory is missing? {}",
         &secret_directory_path
     ))?;
@@ -136,7 +136,7 @@ fn delete_user(username: &str) -> Result<(), Error> {
             continue;
         }
 
-        fs::remove_file(&crypt_file_path).context(anyhow!(
+        fs::remove_file(&crypt_file_path).context(format!(
             "could not remove file {}",
             &secret_directory_path
         ))?;
@@ -213,7 +213,7 @@ fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<(
             Ok(_k) => {},
             Err(_e) => {
                 let crypt_file_path = format!("./.vault/secrets/{}/{}.crypt", secret_name, username_rotated);
-                if fs::metadata(&crypt_file_path)?.is_file() {
+                if fs::metadata(&crypt_file_path).is_ok() {
                     return Err(anyhow!("could not read secret {}", crypt_file_path));
                 }
             }
