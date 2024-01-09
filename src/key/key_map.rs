@@ -11,6 +11,7 @@ use std::fs::{File};
 use std::io::Read;
 use std::path::Path;
 use globset::Glob;
+use serde_derive::Deserialize;
 use toml;
 
 #[derive(Debug)]

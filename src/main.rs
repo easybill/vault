@@ -1,19 +1,3 @@
-extern crate openssl;
-extern crate toml;
-#[macro_use]
-extern crate serde_derive;
-extern crate clap;
-extern crate regex;
-#[macro_use]
-extern crate byteorder;
-extern crate anyhow;
-extern crate dirs;
-extern crate globset;
-extern crate self_update;
-
-#[cfg(test)]
-extern crate serial_test;
-
 use anyhow::{anyhow, format_err, Context, Error};
 
 use clap::{Arg};
