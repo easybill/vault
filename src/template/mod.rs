@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Error};
-use key::key_map::KeyMap;
+use crate::key::key_map::KeyMap;
 use regex::Regex;
 use std::fs::File;
 use std::io::Read;

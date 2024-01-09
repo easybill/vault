@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Context, Error};
-use key::Pem;
-use key::PublicKey;
+use crate::key::Pem;
+use crate::key::PublicKey;
 use openssl::rand::rand_bytes;
 use openssl::rsa::{Padding, Rsa};
 use openssl::symm::{decrypt, encrypt, Cipher};
-use proto::VaultFile;
+use crate::proto::VaultFile;
 
 #[derive(Clone)]
 pub struct CryptedFileContent {

@@ -2,10 +2,10 @@ use std::fs;
 use std::fs::{remove_dir, remove_file};
 use std::time::SystemTime;
 use anyhow::{anyhow, Context, Error};
-use create_keys;
-use key::key_map::{KeyMap, KeyMapConfig, Subscription};
-use key::Pem;
-use ui::question::Question;
+use crate::create_keys;
+use crate::key::key_map::{KeyMap, KeyMapConfig, Subscription};
+use crate::key::Pem;
+use crate::ui::question::Question;
 
 pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<(), Error> {
 
@@ -94,11 +94,11 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<(), Error> {
     }
 
     for rename in renames {
-        if ::fs::metadata(&rename.to).is_ok() {
+        if crate::fs::metadata(&rename.to).is_ok() {
             return Err(anyhow!("could not copy from {} to {}, file/dir already exsts", &rename.from, &rename.to))
         }
 
-        match ::fs::rename(&rename.from, &rename.to) {
+        match crate::fs::rename(&rename.from, &rename.to) {
             Ok(_) => {},
             Err(e) => return Err(anyhow!("could not copy from {} to {}, error: {}", &rename.from, &rename.to, e))
         };

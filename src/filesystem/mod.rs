@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error};
-use fs;
+use crate::fs;
 use std::path::Path;
 
 pub struct Filesystem;

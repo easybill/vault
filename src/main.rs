@@ -18,18 +18,18 @@ use anyhow::{anyhow, format_err, Context, Error};
 
 use clap::{Arg};
 
-use filesystem::Filesystem;
-use filesystem::FilesystemCheckResult;
-use key::key_map::KeyMap;
-use key::key_map::KeyMapConfig;
+use crate::filesystem::Filesystem;
+use crate::filesystem::FilesystemCheckResult;
+use crate::key::key_map::KeyMap;
+use crate::key::key_map::KeyMapConfig;
 use openssl::rsa::Rsa;
 use std::fs;
 
 use self_update::cargo_crate_version;
-use key::{Pem, PrivateKey, PublicKey};
-use rotate_key::rotate_keys;
-use template::Template;
-use ui::question::Question;
+use crate::key::{Pem, PrivateKey, PublicKey};
+use crate::rotate_key::rotate_keys;
+use crate::template::Template;
+use crate::ui::question::Question;
 
 mod crypto;
 mod filesystem;

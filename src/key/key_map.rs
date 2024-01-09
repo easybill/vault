@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Context, Error};
-use crypto::{Crypto};
-use crypto::UncryptedVaultFile;
-use key::Pem;
-use key::PrivateKey;
-use key::PublicKey;
-use proto::VaultFile;
+use crate::crypto::{Crypto};
+use crate::crypto::UncryptedVaultFile;
+use crate::key::Pem;
+use crate::key::PrivateKey;
+use crate::key::PublicKey;
+use crate::proto::VaultFile;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::{File};
