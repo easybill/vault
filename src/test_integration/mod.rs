@@ -1,3 +1,4 @@
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -87,22 +88,42 @@ fn test_integration_decode_old_version() {
     assert_eq!(expected_template.into_bytes(), template_output);
 }
 
+fn assert_secret() {
+    assert_eq!("VERSION_1_0_0_SECRET_CONTENT", String::from_utf8_lossy(&cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["get", "VERSION_1_0_0_SECRET"], true)))
+}
+
 #[test]
-fn test_integration_rotate_key() {
+fn test_integration_rotate_key_and_decode_content() {
     test_prepare();
 
     let content = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["rotate"], true);
     println!("output: {}", String::from_utf8_lossy(&content));
 
-    fn assert_secret() {
-        assert_eq!("VERSION_1_0_0_SECRET_CONTENT", String::from_utf8_lossy(&cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["get", "VERSION_1_0_0_SECRET"], true)))
+
+
+    // delete backup files
+    {
+        for entry in fs::read_dir("./vault_integration_test/.vault/private_keys").expect("could not readdir") {
+            let entry = entry.expect("dir entry");
+            let path = entry.path();
+
+            if path.is_file() && path.to_string_lossy().contains("_backup_") {
+                fs::remove_file(path).expect("remove");
+            }
+        }
     }
 
+    assert_secret();
+}
 
-    //cmd(VAULT_INTEGRATION_TEST_DIR, "mv", &["./.vault/private_keys/testuser.pem", "./.vault/private_keys/testuser.pem.bak"], false);
-    //cmd(VAULT_INTEGRATION_TEST_DIR, "mv", &["./.vault/private_keys/testuser.pub.pem", "./.vault/private_keys/testuser.pub.pem.bak"], false);
+#[test]
+fn test_integration_rotate_key_and_read_old_file() {
+    test_prepare();
+    cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["rotate"], true);
+
+    cmd(VAULT_INTEGRATION_TEST_DIR, "rm", &["-rf", "./.vault/secrets"], false);
+
+    cmd(".", "cp", &["-r", "./fixtures/secrets", &format!("{}/.vault/secrets", VAULT_INTEGRATION_TEST_DIR)], false);
 
     assert_secret();
-
-
 }
