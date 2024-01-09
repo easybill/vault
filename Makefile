@@ -7,4 +7,4 @@ clippy:
 	cargo clippy
 
 test:
-	cargo test -- --nocapture
+	cargo test -- --nocapture --test-threads=1
