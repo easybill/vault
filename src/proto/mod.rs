@@ -21,7 +21,7 @@ pub struct VaultFile {
 
 const VAULT_MAGIC_BYTE: u16 = 4242;
 
-const VAULT_HEADER_SIZE: usize = { 2 + 2 + 8 + 8 };
+const VAULT_HEADER_SIZE: usize = 2 + 2 + 8 + 8;
 
 impl VaultFile {
     pub fn get_keyfile_content(&self) -> &Vec<u8> {

@@ -24,7 +24,7 @@ use key::key_map::KeyMap;
 use key::key_map::KeyMapConfig;
 use openssl::rsa::Rsa;
 use std::fs;
-use std::process::Command;
+
 use self_update::cargo_crate_version;
 use key::{Pem, PrivateKey, PublicKey};
 use rotate_key::rotate_keys;
@@ -168,7 +168,7 @@ fn run_main() -> Result<(), Error> {
         return Ok(());
     }
 
-    if let Some(matches) = matches.subcommand_matches("rotate") {
+    if let Some(_matches) = matches.subcommand_matches("rotate") {
         rotate_keys(&KeyMapConfig { path_private_key })?;
         return Ok(());
     }

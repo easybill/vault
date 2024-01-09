@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Error};
-use crypto::{CryptedFileContent, Crypto};
+use crypto::{Crypto};
 use crypto::UncryptedVaultFile;
 use key::Pem;
 use key::PrivateKey;
@@ -7,7 +7,7 @@ use key::PublicKey;
 use proto::VaultFile;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::fs::{File, FileType};
+use std::fs::{File};
 use std::io::Read;
 use std::path::Path;
 use globset::Glob;
@@ -206,11 +206,11 @@ impl KeyMap {
 
                 if !path_as_string.ends_with(".pem") {
                     // by default the directory is empty. its annoying when you get this error everytime.
-                    if (path_as_string.ends_with(".gitkeep")) {
+                    if path_as_string.ends_with(".gitkeep") {
                         continue;
                     }
 
-                    if (path_as_string.ends_with(".bak")) {
+                    if path_as_string.ends_with(".bak") {
                         continue;
                     }
 
@@ -378,7 +378,7 @@ impl KeyMap {
         for pem in &self.pems {
             for file in &possible_files {
                 let vault_file = {
-                    let mut f =
+                    let f =
                         File::open(file).context(anyhow!("could not read file {}", file))?;
 
                     VaultFile::open(f).context("could not create vault file.")?

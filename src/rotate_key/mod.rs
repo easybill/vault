@@ -208,8 +208,8 @@ fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<(
         );
 
         match keymap.fulfill_subscription(&subscription) {
-            Ok(k) => {},
-            Err(e) => {
+            Ok(_k) => {},
+            Err(_e) => {
                 let crypt_file_path = format!("./.vault/secrets/{}/{}.crypt", secret_name, username_rotated);
                 if fs::metadata(&crypt_file_path)?.is_file() {
                     return Err(anyhow!("could not read secret {}", crypt_file_path));

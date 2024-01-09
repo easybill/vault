@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Error};
+use anyhow::{anyhow, Error};
 use fs;
 use std::path::Path;
 

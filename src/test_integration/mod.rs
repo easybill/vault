@@ -13,7 +13,7 @@ mod tests {
         let command_str = command.as_ref().to_string();
 
         let mut cmd = Command::new(&command_str);
-        let mut cmd = cmd
+        let cmd = cmd
             .args(args)
             .env("VAULT_FORCE_YES", "1")
             .current_dir(&dir.as_ref().to_string())
@@ -21,7 +21,7 @@ mod tests {
             ;
 
         if !capture_output {
-            let cmd = cmd.stdout(Stdio::inherit());
+            let _cmd = cmd.stdout(Stdio::inherit());
         }
 
         let output = cmd
