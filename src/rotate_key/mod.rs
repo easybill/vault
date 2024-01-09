@@ -8,8 +8,7 @@ use crate::key::Pem;
 use crate::ui::question::Question;
 
 pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<(), Error> {
-
-
+    
     let keymap = KeyMap::from_path(keymap_config)?;
 
     let pems = keymap.get_private_pems().iter().filter(|x|!x.get_name().contains("_backup_")).collect::<Vec<_>>();
@@ -22,14 +21,17 @@ pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<(), Error> {
     let username_current = pem.get_name();
     let username_rotated = &format!("{}_to_rotate", username_current);
 
+    println!("1. generate new key");
     create_keys(&format!("{}_to_rotate", username_current))?;
 
     let keymap = KeyMap::from_path(keymap_config)?;
 
+    println!("2. allow access to all keys");
     allow_access_to_all_keys(&keymap, &username_rotated)?;
+    println!("2. delete the old key");
     delete_user(username_current)?;
+    println!("3. rename user");
     rename_user(&username_rotated, &username_current)?;
-
     println!("the key has been rotated, the old key is still there and has a backup suffix. ");
 
     Ok(())
@@ -186,7 +188,7 @@ fn delete_user(username: &str) -> Result<(), Error> {
 fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<(), Error> {
     let secret_directory_path = "./.vault/secrets/";
 
-    let secret_directory_path_readdir = fs::read_dir(&secret_directory_path).context(anyhow!(
+    let secret_directory_path_readdir = fs::read_dir(&secret_directory_path).context(format!(
         "could not read subscription path. directory is missing? {}",
         &secret_directory_path
     ))?;

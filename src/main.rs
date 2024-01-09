@@ -24,14 +24,8 @@ mod ui;
 mod test_integration;
 mod rotate_key;
 
-fn main() {
-    if let Err(err) = run_main() {
-        eprintln!("Error: {}", &err);
-        std::process::exit(1);
-    }
-}
 
-fn run_main() -> Result<(), Error> {
+fn main() -> ::anyhow::Result<()> {
     let matches = ::clap::Command::new("Vault")
         .version(cargo_crate_version!())
         .subcommand(
@@ -153,7 +147,7 @@ fn run_main() -> Result<(), Error> {
     }
 
     if let Some(_matches) = matches.subcommand_matches("rotate") {
-        rotate_keys(&KeyMapConfig { path_private_key })?;
+        rotate_keys(&KeyMapConfig { path_private_key }).context("rotate keys")?;
         return Ok(());
     }
 
