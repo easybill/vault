@@ -24,7 +24,6 @@ mod ui;
 mod test_integration;
 mod rotate_key;
 
-
 fn main() -> ::anyhow::Result<()> {
     let matches = ::clap::Command::new("Vault")
         .version(cargo_crate_version!())
@@ -67,6 +66,9 @@ fn main() -> ::anyhow::Result<()> {
             ::clap::Command::new("rotate")
                 .about("rotated the private key")
         )
+        .subcommand(
+            ::clap::Command::new("check-keys")
+        )
         .get_matches();
 
     match Filesystem::check_filesystem() {
@@ -86,6 +88,24 @@ fn main() -> ::anyhow::Result<()> {
         .find(|(ref key, _)| key == "VAULT_PRIVATE_KEY_PATH")
         .map(|(_, value)| value.to_string())
         .unwrap_or_else(|| "./.vault/private_keys".to_string());
+
+
+    if let Some(_matches) = matches.subcommand_matches("check-keys") {
+        for _ in 1..3 {
+            let keymap = KeyMap::from_path(&KeyMapConfig {
+                path_private_key: path_private_key.clone(),
+            })?;
+
+            println!("keys are fine");
+            if keymap.get_private_pems().len() == 0 {
+                eprintln!("there is no private key");
+                ::std::process::exit(1);
+            }
+        }
+
+        eprintln!("keys are fine");
+        ::std::process::exit(1);
+    }
 
     let mut keymap = KeyMap::from_path(&KeyMapConfig {
         path_private_key: path_private_key.clone(),

@@ -151,3 +151,17 @@ Similar concept uses TLS -> TLS Key Exchange.
 
 This theoretically allows to encrypt files of any size.
 Currently the size is limited, this can be relaxed later if necessary.
+
+# PGP + Smart Cards
+Wenn Vault auf einen private key stößt, welcher auf .pgp endet, versucht vault mit dem kommandozeilen tool gpg den private key 
+on the fly zu dekodieren.
+
+## Einrichtung eines Yubikeys (todo)
+
+Achtung, wenn schon ein private key auf dem yubikey erzeugt wurde, dann wird dieser überschrieben.
+
+1. Stecke den Yubikey oder die Smartcard an den Rechner.
+2. verfifiziere mit dem aufruf `gpg --card-status`, dass die Karte gefunden wurde.
+3. rufte `gpg --card-edit` auf.
+[...] 
+// todo 

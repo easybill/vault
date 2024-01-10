@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Error};
 use std::fs::File;
 use std::io::Read;
+use std::process::Command;
 
 pub mod key_map;
 
@@ -49,13 +50,47 @@ struct Key;
 
 impl Key {
     pub fn load_from_file(path: &str) -> Result<Vec<u8>, Error> {
-        let mut f = File::open(path).context(anyhow!("open file {}", path))?;
+
+        if path.ends_with(".pgp") {
+            return Self::load_from_file_pgp(path).context(format!("try to decode key {}", path));
+        }
+
+        let mut f = File::open(path).context(format!("open file {}", path))?;
         let mut content: Vec<u8> = vec![];
 
         f.read_to_end(&mut content)
-            .context(anyhow!("could not read file {}", path))?;
+            .context(format!("could not read file {}", path))?;
 
         Ok(content)
+    }
+
+    fn load_from_file_pgp(path: &str) -> Result<Vec<u8>, Error> {
+        let mut child = Command::new("gpg")
+            .arg("--decrypt")
+            .arg("--pinentry-mode")
+            .arg("loopback")
+            .arg(path)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .stdin(std::process::Stdio::piped())
+            .spawn().context("could not call gpg")?;
+
+        let mut output_stdout = String::new();
+        if let Some(mut stdout) = child.stdout.take() {
+            stdout.read_to_string(&mut output_stdout)?;
+        }
+        let mut output_stderr = String::new();
+        if let Some(mut stderr) = child.stderr.take() {
+            stderr.read_to_string(&mut output_stderr)?;
+        }
+
+        let status = child.wait()?;
+
+        if !status.success() {
+            return Err(anyhow!("could not run gpg --decrypt {}, {}, {}", path, output_stdout, output_stderr));
+        }
+
+        Ok(output_stdout.into_bytes())
     }
 }
 
@@ -101,11 +136,11 @@ impl PrivateKey {
                     None => path.into(),
                 };
 
-                if !filename.ends_with(".pem") {
+                if !filename.trim_end_matches(".pgp").ends_with(".pem") {
                     return Err(anyhow!("private key '{}' does not end with .pem", path));
                 }
 
-                filename[..filename.len() - 4].to_string()
+                filename.trim_end_matches(".pgp").trim_end_matches(".pem").to_string()
             },
         })
     }

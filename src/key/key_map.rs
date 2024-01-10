@@ -205,7 +205,7 @@ impl KeyMap {
                     continue;
                 }
 
-                if !path_as_string.ends_with(".pem") {
+                if !path_as_string.ends_with(".pem") && !path_as_string.ends_with(".pem.pgp") {
                     // by default the directory is empty. its annoying when you get this error everytime.
                     if path_as_string.ends_with(".gitkeep") {
                         continue;
@@ -222,7 +222,7 @@ impl KeyMap {
                 // path is a private key, no lets try to find the pub key.
 
                 let public_key_path =
-                    format!("{}.pub.pem", &path_as_string[..path_as_string.len() - 4]);
+                    format!("{}.pub.pem", &path_as_string.trim_end_matches(".pgp")[..path_as_string.trim_end_matches(".pgp").len() - 4]);
 
                 let file_exists = match fs::metadata(&public_key_path) {
                     Err(_) => false,
@@ -238,11 +238,11 @@ impl KeyMap {
                 }
 
                 buffer.push(Pem::new(
-                    PrivateKey::load_from_file(&path_as_string).context(anyhow!(
+                    PrivateKey::load_from_file(&path_as_string).context(format!(
                         "failed, to add key, private key: {}",
                         &path_as_string
                     ))?,
-                    PublicKey::load_from_file(&public_key_path).context(anyhow!(
+                    PublicKey::load_from_file(&public_key_path).context(format!(
                         "failed, to add key, private key: {}",
                         &path_as_string
                     ))?,
