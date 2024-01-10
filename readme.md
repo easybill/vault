@@ -81,13 +81,20 @@ Vault throws an error if keys cannot be replaced.
 Therefore always pass only the stdout `1>` in a template.
 
 ### Fetching multiple secrets
-sometimes you need to fetch multiple secrets. Vault speaks json.
+sometimes you need to fetch multiple secrets / templates. Vault speaks json.
 you can fetch multiple secrets and templates in a single vault call.
 the secret must be valid uf8 (for now), please open an issue if you need binary support.
 
 ```
-{"secrets": [{"secret": "foo"}], "templates": [{"template": "{vault{ foo }vault}TEST"}]}
+vault get_multi '{"secrets": [{"secret": "foo"}], "templates": [{"template": "{vault{ foo }vault}TEST"}]}'
 ```
+
+### enforce vault versions using --expect_version=[VERSION_REQUIREMENT]
+vault is usually installed on the computers of all employees. if you have a script that calls vault underneath,
+you may want to be able to force certain vault versions. maybe there was a bug in vault or a feature is being used 
+that is only available in this version. you can use the semver requirement syntax. example: `vault --expect_version='>=1.2.3, <1.8.0' get foo`
+if the version requirement does not match with your vault version, you'll get an error prompt and help, how to update vault.
+
 
 ### Overriding the Private Key Directory
 
@@ -161,16 +168,14 @@ Similar concept uses TLS -> TLS Key Exchange.
 This theoretically allows to encrypt files of any size.
 Currently the size is limited, this can be relaxed later if necessary.
 
-# PGP + Smart Cards
-Wenn Vault auf einen private key stößt, welcher auf .pgp endet, versucht vault mit dem kommandozeilen tool gpg den private key 
-on the fly zu dekodieren.
+# PGP / GPG + Smart Cards
+vault supports pgp encrypted private keys.
+If vault comes across such a private key which has .pgp as file extension, vault tries to decrypt it using gpg --decrypt ./.vault/private_keys/[username].pem.pgp.
+Authentication with a yubikey could then take place here, for example.
+the secrets themselves are not encrypted via gpg, but the private key for decrypting the secrets can be protected in this way.
+ideally with a smartcard / yubikey / ... .
 
-## Einrichtung eines Yubikeys (todo)
+example:
+without pgp: ./.vault/private_keys/[username].pem
+with pgp: ./.vault/private_keys/[username].pem.pgp
 
-Achtung, wenn schon ein private key auf dem yubikey erzeugt wurde, dann wird dieser überschrieben.
-
-1. Stecke den Yubikey oder die Smartcard an den Rechner.
-2. verfifiziere mit dem aufruf `gpg --card-status`, dass die Karte gefunden wurde.
-3. rufte `gpg --card-edit` auf.
-[...] 
-// todo 
