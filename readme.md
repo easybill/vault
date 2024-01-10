@@ -95,6 +95,11 @@ you may want to be able to force certain vault versions. maybe there was a bug i
 that is only available in this version. you can use the semver requirement syntax. example: `vault --expect_version='>=1.2.3, <1.8.0' get foo`
 if the version requirement does not match with your vault version, you'll get an error prompt and help, how to update vault.
 
+### Rotate your own key
+you can rotate your own private key.
+```
+vault rotate
+```
 
 ### Overriding the Private Key Directory
 
