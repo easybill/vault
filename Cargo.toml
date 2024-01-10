@@ -8,6 +8,7 @@ edition = "2021"
 openssl = {version = "0.10.*", features = ["vendored"]}
 toml = "0.*"
 serde_derive = "*"
+serde_json = "*"
 serde = "*"
 clap = "4.*"
 regex = "1.*"

@@ -10,6 +10,7 @@ use openssl::rsa::Rsa;
 use std::fs;
 
 use self_update::cargo_crate_version;
+use crate::commands::get_multi::get_multi;
 use crate::key::{Pem, PrivateKey, PublicKey};
 use crate::rotate_key::rotate_keys;
 use crate::template::Template;
@@ -23,6 +24,7 @@ mod template;
 mod ui;
 mod test_integration;
 mod rotate_key;
+mod commands;
 
 fn main() -> ::anyhow::Result<()> {
     let matches = ::clap::Command::new("Vault")
@@ -32,6 +34,14 @@ fn main() -> ::anyhow::Result<()> {
                 Arg::new("key")
                     .required(true)
                     .help("lists test values"),
+            ),
+        )
+        .subcommand(
+            ::clap::Command::new("get_multi")
+            .arg(
+                Arg::new("json")
+                    .required(true)
+                    .help(r#"something like {"secrets": [{"secret": "foo"}], "templates": [{"template": "{vault{ foo }vault}TEST"}]}"#),
             ),
         )
         .subcommand(
@@ -139,6 +149,13 @@ fn main() -> ::anyhow::Result<()> {
                 ::std::process::exit(1);
             }
         }
+    }
+
+    if let Some(matches) = matches.subcommand_matches("get_multi") {
+        return get_multi(
+            matches.get_one::<String>("json").expect("key json must exists"),
+            &keymap
+        );
     }
 
     if let Some(matches) = matches.subcommand_matches("create-openssl-key") {

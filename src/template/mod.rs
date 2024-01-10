@@ -26,6 +26,12 @@ impl<'a> Template<'a> {
             buffer
         };
 
+        self.parse_from_str(&file_content)
+    }
+
+    pub fn parse_from_str(&self, template: &str) -> Result<String, Error> {
+        let mut file_content = template.to_string();
+
         {
             let regex = Regex::new(r#"\{vault\{(.+)\}vault\}"#).expect("failed to compile regex");
 
@@ -45,7 +51,7 @@ impl<'a> Template<'a> {
                     .trim()
                     .to_string();
 
-                let uncrypted_key = self.keymap.decrypt_to_string(&key).context(anyhow!(
+                let uncrypted_key = self.keymap.decrypt_to_string(&key).context(format!(
                     "template requires the key \"{}\", but it's not possible to decrypt the key",
                     key.clone()
                 ))?;

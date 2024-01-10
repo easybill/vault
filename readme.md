@@ -80,6 +80,15 @@ Vault throws an error if keys cannot be replaced.
 ** Attention: ** Vault may generate an error output if it stumbles e.g. over files which it cannot process.
 Therefore always pass only the stdout `1>` in a template.
 
+### Fetching multiple secrets
+sometimes you need to fetch multiple secrets. Vault speaks json.
+you can fetch multiple secrets and templates in a single vault call.
+the secret must be valid uf8 (for now), please open an issue if you need binary support.
+
+```
+{"secrets": [{"secret": "foo"}], "templates": [{"template": "{vault{ foo }vault}TEST"}]}
+```
+
 ### Overriding the Private Key Directory
 
 by default vault will lookup `~/.vault/private_keys` and `~/.vault/private_keys`.
