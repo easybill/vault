@@ -10,6 +10,7 @@ use openssl::rsa::Rsa;
 use std::fs;
 
 use self_update::cargo_crate_version;
+use semver::{Version, VersionReq};
 use crate::commands::get_multi::get_multi;
 use crate::key::{Pem, PrivateKey, PublicKey};
 use crate::rotate_key::rotate_keys;
@@ -28,6 +29,13 @@ mod commands;
 
 fn main() -> ::anyhow::Result<()> {
     let matches = ::clap::Command::new("Vault")
+
+        .arg(
+            Arg::new("expect_version")
+                .long("expect_version")
+                .required(false)
+                .help("are you using a feature that only exists in a new vault version and your coworkers are still using an old version? install --min-version to warn your coworkers =)"),
+        )
         .version(cargo_crate_version!())
         .subcommand(
             ::clap::Command::new("get").arg(
@@ -80,6 +88,17 @@ fn main() -> ::anyhow::Result<()> {
             ::clap::Command::new("check-keys")
         )
         .get_matches();
+
+    if let Some(min_version) = matches.get_one::<String>("expect_version") {
+        let version_requirement = VersionReq::parse(min_version).context("could not parse version requirement, expected something like >=1.2.3, <1.8.0")?;
+        let version_current = Version::parse(cargo_crate_version!()).context("could not parse current version, should not happen")?;
+
+        if !version_requirement.matches(&version_current) {
+            eprintln!("probably a coworker wants to prevent this vault version from being used. maybe there was a bug in vault or a feature is being used that is only available in this version.");
+            eprintln!("may you want to run vault update to upgrade to the latest version.");
+            ::std::process::exit(1);
+        }
+    }
 
     match Filesystem::check_filesystem() {
         FilesystemCheckResult::IsOk => {}

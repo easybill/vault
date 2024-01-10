@@ -1416,6 +1416,7 @@ dependencies = [
  "openssl",
  "regex",
  "self_update",
+ "semver",
  "serde",
  "serde_derive",
  "serde_json",
