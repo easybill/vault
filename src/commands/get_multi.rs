@@ -87,6 +87,9 @@ pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<(), Error> {
 
     if errors.len() != 0 {
         eprintln!("could not decrypt some keys.");
+        for error in errors {
+            eprintln!("\t{}", error);
+        }
         ::std::process::exit(1);
     }
 

@@ -97,6 +97,19 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_integration_multi_key() {
+        test_prepare();
+
+        let content = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["get_multi", r#"{"secrets": [{"secret": "VERSION_1_0_0_SECRET"}], "templates": [{"template": "{vault{ VERSION_1_0_0_SECRET }vault}TEST"}]}"#], true);
+
+        assert_eq!(
+            String::from_utf8(content).expect("must be valid utf8"),
+            r#"{"secrets":{"VERSION_1_0_0_SECRET":{"name":"VERSION_1_0_0_SECRET","value":"VERSION_1_0_0_SECRET_CONTENT"}},"templates":{"{vault{ VERSION_1_0_0_SECRET }vault}TEST":{"name":"{vault{ VERSION_1_0_0_SECRET }vault}TEST","value":"VERSION_1_0_0_SECRET_CONTENTTEST"}}}"#
+        );
+    }
+
+    #[test]
+    #[serial]
     fn test_integration_rotate_key_and_decode_content() {
         test_prepare();
 
