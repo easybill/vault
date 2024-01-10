@@ -184,3 +184,13 @@ example:
 without pgp: ./.vault/private_keys/[username].pem
 with pgp: ./.vault/private_keys/[username].pem.pgp
 
+# Mocking vault calls / Integrationtests
+
+if you want to test vault in ci environments, it is good to make sure that a certain secret would be there, even if you don't want to expose the secret.
+it can also be useful to overwrite all the secrets in vault (just for ci). this is possible with this the argument `--i_know_what_i_do__enable_fetch_raw_secrets_from_env=[USER]`.
+if you use the commandline argument vault ensures that the `[USER]` could decrypt the secret. You must provide the secret to vault as an environment variable `VAULT_DEBUG_SECRET_[SECRET]`.
+this allows you to write integration tests for scripts that need to call vault.
+
+```
+export VAULT_DEBUG_SECRET_foo=some_test_value; vault --i_know_what_i_do__enable_fetch_raw_secrets_from_env=test get_multi '{"secrets": [{"secret": "foo"}]}'
+```

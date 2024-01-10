@@ -36,6 +36,11 @@ fn main() -> ::anyhow::Result<()> {
                 .required(false)
                 .help("are you using a feature that only exists in a new vault version and your coworkers are still using an old version? install --min-version to warn your coworkers =)"),
         )
+        .arg(
+            Arg::new("i_know_what_i_do__enable_fetch_raw_secrets_from_env")
+                .long("i_know_what_i_do__enable_fetch_raw_secrets_from_env")
+                .required(false)
+        )
         .version(cargo_crate_version!())
         .subcommand(
             ::clap::Command::new("get").arg(
@@ -89,6 +94,8 @@ fn main() -> ::anyhow::Result<()> {
         )
         .get_matches();
 
+    let debug_enable_fetch_raw_secrets_from_env = matches.get_one::<String>("i_know_what_i_do__enable_fetch_raw_secrets_from_env").map(|x|x.clone());
+
     if let Some(min_version) = matches.get_one::<String>("expect_version") {
         let version_requirement = VersionReq::parse(min_version).context("could not parse version requirement, expected something like >=1.2.3, <1.8.0")?;
         let version_current = Version::parse(cargo_crate_version!()).context("could not parse current version, should not happen")?;
@@ -123,6 +130,7 @@ fn main() -> ::anyhow::Result<()> {
         for _ in 1..3 {
             let keymap = KeyMap::from_path(&KeyMapConfig {
                 path_private_key: path_private_key.clone(),
+                debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone()
             })?;
 
             println!("keys are fine");
@@ -138,20 +146,8 @@ fn main() -> ::anyhow::Result<()> {
 
     let mut keymap = KeyMap::from_path(&KeyMapConfig {
         path_private_key: path_private_key.clone(),
+        debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone()
     })?;
-
-    if let Some(matches) = matches.subcommand_matches("update") {
-        let status = self_update::backends::github::Update::configure()
-            .repo_owner("easybill")
-            .repo_name("vault")
-            .bin_name("vault")
-            .show_download_progress(true)
-            .current_version(matches.get_one::<String>("current_version").expect("current version has a default"))
-            .build()?
-            .update()?;
-        println!("Update status: `{}`!", status.version());
-        return Ok(())
-    }
 
     // You can check the value provided by positional arguments, or option arguments
     if let Some(matches) = matches.subcommand_matches("get") {
@@ -177,14 +173,6 @@ fn main() -> ::anyhow::Result<()> {
         );
     }
 
-    if let Some(matches) = matches.subcommand_matches("create-openssl-key") {
-        let username = matches.get_one::<String>("username").expect("username must exists");
-
-        create_keys(username)?;
-
-        return Ok(());
-    }
-
     if let Some(matches) = matches.subcommand_matches("template") {
         let filename = matches.get_one::<String>("filename").expect("filename must exists");
 
@@ -202,8 +190,37 @@ fn main() -> ::anyhow::Result<()> {
         return Ok(());
     }
 
+    if debug_enable_fetch_raw_secrets_from_env.is_some() {
+        unimplemented!("command is not implemented for debug_enable_fetch_raw_secrets_from_env");
+    }
+
+    if let Some(matches) = matches.subcommand_matches("update") {
+        let status = self_update::backends::github::Update::configure()
+            .repo_owner("easybill")
+            .repo_name("vault")
+            .bin_name("vault")
+            .show_download_progress(true)
+            .current_version(matches.get_one::<String>("current_version").expect("current version has a default"))
+            .build()?
+            .update()?;
+        println!("Update status: `{}`!", status.version());
+        return Ok(())
+    }
+
+    if let Some(matches) = matches.subcommand_matches("create-openssl-key") {
+        let username = matches.get_one::<String>("username").expect("username must exists");
+
+        create_keys(username)?;
+
+        return Ok(());
+    }
+
     if let Some(_matches) = matches.subcommand_matches("rotate") {
-        rotate_keys(&KeyMapConfig { path_private_key }).context("rotate keys")?;
+
+        rotate_keys(&KeyMapConfig {
+            path_private_key,
+            debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone()
+        }).context("rotate keys")?;
         return Ok(());
     }
 
@@ -213,7 +230,10 @@ fn main() -> ::anyhow::Result<()> {
 
     if scan_for_new_secrets(&keymap)? > 0 {
         // refresh the keymap
-        keymap = KeyMap::from_path(&KeyMapConfig { path_private_key })?;
+        keymap = KeyMap::from_path(&KeyMapConfig {
+            path_private_key,
+            debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone()
+        })?;
     }
 
     // check loaded keys:
