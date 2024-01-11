@@ -184,6 +184,12 @@ example:
 without pgp: ./.vault/private_keys/[username].pem
 with pgp: ./.vault/private_keys/[username].pem.pgp
 
+list your keys: `gpg --list-keys`
+
+```
+gpg --trust-model always --encrypt --recipient "[YOUR_KEY]" -o ./.vault/private_keys/[USERNAME].pem.pgp ./.vault/private_keys/USERNAME.pem
+```
+
 # Mocking vault calls / Integrationtests
 
 if you want to test vault in ci environments, it is good to make sure that a certain secret would be there, even if you don't want to expose the secret.
