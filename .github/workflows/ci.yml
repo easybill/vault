@@ -60,14 +60,14 @@ jobs:
           cp target/${{ matrix.platform.target }}/release/vault artifact/vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
 
       - name: Prepare output artifact for next step
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         with:
           name: vault-${{ env.RELEASE_VERSION }}-${{ matrix.platform.target }}
           path: artifact/vault-${{ env.RELEASE_VERSION }}-${{ matrix.platform.target }}
 
       - name: Prepare output artifact for next step
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         with:
           name: vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
@@ -79,12 +79,12 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: binaries
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true
           files: |
