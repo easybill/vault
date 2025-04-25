@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Error};
 use crate::fs;
+use anyhow::{Error, anyhow};
 use std::path::Path;
 
 pub struct Filesystem;
@@ -49,7 +49,8 @@ impl Filesystem {
             if !Self::directory_exists(expected_directory) {
                 return FilesystemCheckResult::new_error(vec![format!(
                     "Directory {}/{} must exist, but is not present.",
-                    ::std::env::current_dir().map_or_else(|_| "".to_string(), |x|x.to_string_lossy().to_string()),
+                    std::env::current_dir()
+                        .map_or_else(|_| "".to_string(), |x| x.to_string_lossy().to_string()),
                     expected_directory
                 )]);
             }
@@ -60,37 +61,10 @@ impl Filesystem {
 
     pub fn create_basic_directory_structure() -> Result<(), Error> {
         for dir in Self::get_basic_directories().iter() {
-            fs::create_dir_all(&dir)
+            fs::create_dir_all(dir)
                 .map_err(|e| anyhow!("could not create directory {}, {}", &dir, e))?
         }
 
         Ok(())
     }
-
-    /*
-    pub fn resolve_key_user_directories() -> Result<Vec<PathBuf>, ::failure::Error>
-    {
-        let mut buf = vec![];
-
-        if let Ok(key_files) = fs::read_dir("~/.vault/keys") {
-            for key_file in key_files {
-                match key_file {
-                    Err(_) => {},
-                    Ok(k) => {
-                        buf.push(k.path());
-                    },
-                }
-            }
-        }
-
-        let key_files = fs::read_dir("./.vault/keys")
-            .map_err(|e| format_err!("could not read key directory ./.vault/keys, {}", e))?;
-
-        for path in key_files {
-            buf.push(path.unwrap().path());
-        }
-
-        Ok(buf)
-    }
-    */
 }

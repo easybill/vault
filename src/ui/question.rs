@@ -1,6 +1,6 @@
+use std::io::Write;
 use std::io::stdin;
 use std::io::stdout;
-use std::io::Write;
 
 pub struct Question;
 
@@ -27,8 +27,7 @@ impl Question {
     }
 
     pub fn confirm(question: &str) -> bool {
-
-        if std::env::vars().find(|x|x == &("VAULT_FORCE_YES".to_string(), "1".to_string())).is_some() {
+        if std::env::vars().any(|(ref key, ref value)| key == "VAULT_FORCE_YES" && value == "1") {
             return true;
         }
 

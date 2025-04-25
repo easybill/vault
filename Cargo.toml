@@ -2,7 +2,7 @@
 name = "vault"
 version = "1.0.10"
 authors = ["timglabisch <glabisch@easybill.de>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 openssl = {version = "0.10.*", features = ["vendored"]}

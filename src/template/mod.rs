@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Context, Error};
 use crate::key::key_map::KeyMap;
+use anyhow::{Context, Error, anyhow};
 use regex::Regex;
 use std::fs::File;
 use std::io::Read;
@@ -14,7 +14,7 @@ impl<'a> Template<'a> {
     }
 
     pub fn parse_from_file(&self, filename: &str) -> Result<String, Error> {
-        let mut file_content = {
+        let file_content = {
             let mut f =
                 File::open(filename).context(anyhow!("could not open tempalte {}.", &filename))?;
 
@@ -33,7 +33,7 @@ impl<'a> Template<'a> {
         let mut file_content = template.to_string();
 
         {
-            let regex = Regex::new(r#"\{vault\{(.+)\}vault\}"#).expect("failed to compile regex");
+            let regex = Regex::new(r#"\{vault\{(.+)}vault}"#).expect("failed to compile regex");
 
             let file_content_copy = file_content.clone();
             let captures = regex.captures_iter(&file_content_copy);

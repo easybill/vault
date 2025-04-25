@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Context, Error};
 use crate::key::Pem;
 use crate::key::PublicKey;
+use crate::proto::VaultFile;
+use anyhow::{Context, Error, anyhow};
 use openssl::rand::rand_bytes;
 use openssl::rsa::{Padding, Rsa};
-use openssl::symm::{decrypt, encrypt, Cipher};
-use crate::proto::VaultFile;
+use openssl::symm::{Cipher, decrypt, encrypt};
 
 #[derive(Clone)]
 pub struct CryptedFileContent {
@@ -52,7 +52,7 @@ impl Crypto {
         let mut iv = vec![0; 128 / 8];
         rand_bytes(&mut iv).context("could not create random bytes for iv.")?;
 
-        let key = Crypto::key_encrypt(public_key, &password.to_vec())
+        let key = Crypto::key_encrypt(public_key, &password)
             .context("could not encrypt using public_key")?;
 
         let cipher = Cipher::aes_256_cbc();
@@ -92,14 +92,14 @@ impl Crypto {
 
         let content = &crypted_vault_file.get_secret_content()[128 / 8..];
 
-        let content = decrypt(cipher, &password, Some(&iv), &content)
+        let content = decrypt(cipher, &password, Some(iv), content)
             .context("could not encrypt using content")?;
 
         Ok(UncryptedVaultFile { content })
     }
 
     pub fn key_encrypt(public_key: &PublicKey, data: &[u8]) -> Result<Vec<u8>, Error> {
-        let rsa = ::openssl::rsa::Rsa::public_key_from_pem(public_key.get_data())
+        let rsa = openssl::rsa::Rsa::public_key_from_pem(public_key.get_data())
             .context(anyhow!("invalid public key {}", &public_key.get_name()))?;
 
         //let rsa = Rsa::public_key_from_pem(&self.public_key).map_err(|_| { "invalid public key".to_string() })?;
@@ -107,7 +107,7 @@ impl Crypto {
 
         // look at http://php.net/manual/de/function.openssl-public-encrypt.php
         let _ = rsa
-            .public_encrypt(&data, encrypted_data.as_mut_slice(), Padding::PKCS1)
+            .public_encrypt(data, encrypted_data.as_mut_slice(), Padding::PKCS1)
             .context(anyhow!("could not encrypt"))?;
 
         Ok(encrypted_data)
@@ -120,7 +120,7 @@ impl Crypto {
         let mut decrypted_data: Vec<u8> = vec![0; rsa.size() as usize];
 
         let size = rsa
-            .private_decrypt(&data, decrypted_data.as_mut_slice(), Padding::PKCS1)
+            .private_decrypt(data, decrypted_data.as_mut_slice(), Padding::PKCS1)
             .context("could not decrypt")?;
 
         Ok(decrypted_data[..size].to_vec())
