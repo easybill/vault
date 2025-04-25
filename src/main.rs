@@ -1,6 +1,6 @@
-use anyhow::{anyhow, format_err, Context, Error};
+use anyhow::{Context, Error, anyhow, format_err};
 
-use clap::{Arg};
+use clap::Arg;
 
 use crate::filesystem::Filesystem;
 use crate::filesystem::FilesystemCheckResult;
@@ -9,26 +9,26 @@ use crate::key::key_map::KeyMapConfig;
 use openssl::rsa::Rsa;
 use std::fs;
 
-use self_update::cargo_crate_version;
-use semver::{Version, VersionReq};
 use crate::commands::get_multi::get_multi;
 use crate::key::{Pem, PrivateKey, PublicKey};
 use crate::rotate_key::rotate_keys;
 use crate::template::Template;
 use crate::ui::question::Question;
+use self_update::cargo_crate_version;
+use semver::{Version, VersionReq};
 
+mod commands;
 mod crypto;
 mod filesystem;
 mod key;
 mod proto;
-mod template;
-mod ui;
-mod test_integration;
 mod rotate_key;
-mod commands;
+mod template;
+mod test_integration;
+mod ui;
 
-fn main() -> ::anyhow::Result<()> {
-    let matches = ::clap::Command::new("Vault")
+fn main() -> anyhow::Result<()> {
+    let matches =clap::Command::new("Vault")
 
         .arg(
             Arg::new("expect_version")
@@ -43,14 +43,14 @@ fn main() -> ::anyhow::Result<()> {
         )
         .version(cargo_crate_version!())
         .subcommand(
-            ::clap::Command::new("get").arg(
+           clap::Command::new("get").arg(
                 Arg::new("key")
                     .required(true)
                     .help("lists test values"),
             ),
         )
         .subcommand(
-            ::clap::Command::new("get_multi")
+           clap::Command::new("get_multi")
             .arg(
                 Arg::new("json")
                     .required(true)
@@ -58,7 +58,7 @@ fn main() -> ::anyhow::Result<()> {
             ),
         )
         .subcommand(
-            ::clap::Command::new("create-openssl-key")
+           clap::Command::new("create-openssl-key")
                 .about("does testing things")
                 .arg(
                     Arg::new("username")
@@ -67,7 +67,7 @@ fn main() -> ::anyhow::Result<()> {
                 ),
         )
         .subcommand(
-            ::clap::Command::new("update")
+           clap::Command::new("update")
                 .about("updates vault")
                 .arg(
                     Arg::new("current_version")
@@ -77,7 +77,7 @@ fn main() -> ::anyhow::Result<()> {
                 ),
         )
         .subcommand(
-            ::clap::Command::new("template")
+           clap::Command::new("template")
                 .about("does testing things")
                 .arg(
                     Arg::new("filename")
@@ -86,24 +86,31 @@ fn main() -> ::anyhow::Result<()> {
                 ),
         )
         .subcommand(
-            ::clap::Command::new("rotate")
+           clap::Command::new("rotate")
                 .about("rotated the private key")
         )
         .subcommand(
-            ::clap::Command::new("check-keys")
+           clap::Command::new("check-keys")
         )
         .get_matches();
 
-    let debug_enable_fetch_raw_secrets_from_env = matches.get_one::<String>("i_know_what_i_do__enable_fetch_raw_secrets_from_env").map(|x|x.clone());
+    let debug_enable_fetch_raw_secrets_from_env = matches
+        .get_one::<String>("i_know_what_i_do__enable_fetch_raw_secrets_from_env")
+        .cloned();
 
     if let Some(min_version) = matches.get_one::<String>("expect_version") {
-        let version_requirement = VersionReq::parse(min_version).context("could not parse version requirement, expected something like >=1.2.3, <1.8.0")?;
-        let version_current = Version::parse(cargo_crate_version!()).context("could not parse current version, should not happen")?;
+        let version_requirement = VersionReq::parse(min_version).context(
+            "could not parse version requirement, expected something like >=1.2.3, <1.8.0",
+        )?;
+        let version_current = Version::parse(cargo_crate_version!())
+            .context("could not parse current version, should not happen")?;
 
         if !version_requirement.matches(&version_current) {
-            eprintln!("probably a coworker wants to prevent this vault version from being used. maybe there was a bug in vault or a feature is being used that is only available in this version.");
+            eprintln!(
+                "probably a coworker wants to prevent this vault version from being used. maybe there was a bug in vault or a feature is being used that is only available in this version."
+            );
             eprintln!("may you want to run vault update to upgrade to the latest version.");
-            ::std::process::exit(1);
+            std::process::exit(1);
         }
     }
 
@@ -120,61 +127,65 @@ fn main() -> ::anyhow::Result<()> {
         }
     };
 
-    let path_private_key = ::std::env::vars()
-        .find(|(ref key, _)| key == "VAULT_PRIVATE_KEY_PATH")
+    let path_private_key = std::env::vars()
+        .find(|(key, _)| key == "VAULT_PRIVATE_KEY_PATH")
         .map(|(_, value)| value.to_string())
         .unwrap_or_else(|| "./.vault/private_keys".to_string());
-
 
     if let Some(_matches) = matches.subcommand_matches("check-keys") {
         for _ in 1..3 {
             let keymap = KeyMap::from_path(&KeyMapConfig {
                 path_private_key: path_private_key.clone(),
-                debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone()
+                debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env
+                    .clone(),
             })?;
 
             println!("keys are fine");
-            if keymap.get_private_pems().len() == 0 {
+            if keymap.get_private_pems().is_empty() {
                 eprintln!("there is no private key");
-                ::std::process::exit(1);
+                std::process::exit(1);
             }
         }
 
         eprintln!("keys are fine");
-        ::std::process::exit(1);
+        std::process::exit(1);
     }
 
     let mut keymap = KeyMap::from_path(&KeyMapConfig {
         path_private_key: path_private_key.clone(),
-        debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone()
+        debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone(),
     })?;
 
     // You can check the value provided by positional arguments, or option arguments
     if let Some(matches) = matches.subcommand_matches("get") {
         let key = matches.get_one::<String>("key").expect("key must exists");
 
-        match keymap.decrypt(&key) {
+        match keymap.decrypt(key) {
             Ok(k) => {
                 use std::io::Write;
-                ::std::io::stdout().write_all(k.get_content())?;
+                std::io::stdout().write_all(k.get_content())?;
                 return Ok(());
             }
             Err(e) => {
                 eprintln!("Error: {}", &e);
-                ::std::process::exit(1);
+                std::process::exit(1);
             }
         }
     }
 
     if let Some(matches) = matches.subcommand_matches("get_multi") {
         return get_multi(
-            matches.get_one::<String>("json").expect("key json must exists"),
-            &keymap
+            matches
+                .get_one::<String>("json")
+                .expect("key json must exists"),
+            &keymap,
         );
     }
 
     if let Some(matches) = matches.subcommand_matches("template") {
-        let filename = matches.get_one::<String>("filename").expect("filename must exists");
+        let filename = matches
+            .get_one::<String>("filename")
+            .expect("filename must exists");
 
         let template = Template::new(&keymap);
         match template.parse_from_file(filename) {
@@ -183,7 +194,7 @@ fn main() -> ::anyhow::Result<()> {
             }
             Err(e) => {
                 eprintln!("Error: {}", e);
-                ::std::process::exit(1);
+                std::process::exit(1);
             }
         }
 
@@ -200,15 +211,21 @@ fn main() -> ::anyhow::Result<()> {
             .repo_name("vault")
             .bin_name("vault")
             .show_download_progress(true)
-            .current_version(matches.get_one::<String>("current_version").expect("current version has a default"))
+            .current_version(
+                matches
+                    .get_one::<String>("current_version")
+                    .expect("current version has a default"),
+            )
             .build()?
             .update()?;
         println!("Update status: `{}`!", status.version());
-        return Ok(())
+        return Ok(());
     }
 
     if let Some(matches) = matches.subcommand_matches("create-openssl-key") {
-        let username = matches.get_one::<String>("username").expect("username must exists");
+        let username = matches
+            .get_one::<String>("username")
+            .expect("username must exists");
 
         create_keys(username)?;
 
@@ -216,11 +233,12 @@ fn main() -> ::anyhow::Result<()> {
     }
 
     if let Some(_matches) = matches.subcommand_matches("rotate") {
-
         rotate_keys(&KeyMapConfig {
             path_private_key,
-            debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone()
-        }).context("rotate keys")?;
+            debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env
+                .clone(),
+        })
+        .context("rotate keys")?;
         return Ok(());
     }
 
@@ -232,7 +250,8 @@ fn main() -> ::anyhow::Result<()> {
         // refresh the keymap
         keymap = KeyMap::from_path(&KeyMapConfig {
             path_private_key,
-            debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env.clone()
+            debug_enable_fetch_raw_secrets_from_env: debug_enable_fetch_raw_secrets_from_env
+                .clone(),
         })?;
     }
 
@@ -292,7 +311,7 @@ pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize, Error> {
 
     let secret_path = "./.vault/secrets/";
 
-    let paths = fs::read_dir(&secret_path).context(format!(
+    let paths = fs::read_dir(secret_path).context(format!(
         "could not read subscription path. directory is missing? {}",
         &secret_path
     ))?;
@@ -325,7 +344,6 @@ pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize, Error> {
     Ok(new_secrets_created)
 }
 
-
 pub fn create_keys(username: &str) -> Result<Pem, Error> {
     use std::fs::File;
     use std::io::Write;
@@ -344,7 +362,7 @@ pub fn create_keys(username: &str) -> Result<Pem, Error> {
     ]
     .iter()
     {
-        if fs::metadata(&path).is_ok() {
+        if fs::metadata(path).is_ok() {
             return Err(format_err!(
                 "the file {} already exists. could not create the key.",
                 path
@@ -355,10 +373,10 @@ pub fn create_keys(username: &str) -> Result<Pem, Error> {
     // create directory
     let public_directory = format!("./.vault/keys/{}", username);
 
-    for directory in [&public_directory].iter() {
-        fs::create_dir(&directory)
-            .context(format_err!("could not create directory {}", directory))?;
-    }
+    fs::create_dir(&public_directory).context(format_err!(
+        "could not create directory {}",
+        public_directory
+    ))?;
 
     // create config.toml
     {
@@ -376,7 +394,8 @@ pub fn create_keys(username: &str) -> Result<Pem, Error> {
             .public_key_to_pem()
             .context(format_err!("could not run public_key_to_pem {}", username))?;
 
-        let public_key = ::openssl::rsa::Rsa::public_key_from_pem(&k0pkey).unwrap();
+        let public_key = openssl::rsa::Rsa::public_key_from_pem(&k0pkey)
+            .context("could not decode public key")?;
 
         let mut f = File::create(&public_key_path).context(format_err!(
             "could not create .pem.pub, {}",
@@ -411,9 +430,9 @@ pub fn create_keys(username: &str) -> Result<Pem, Error> {
 
     Ok(Pem::new(
         PrivateKey::load_from_file(&private_key_path).context(anyhow!(
-                "failed, to add key, private key: {}",
-                &private_key_path
-            ))?,
+            "failed, to add key, private key: {}",
+            &private_key_path
+        ))?,
         PublicKey::load_from_file(&public_key_path).context(anyhow!(
             "failed, to add key, public key: {}",
             &public_key_path

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use std::fs::File;
 use std::io::Read;
 use std::process::Command;
@@ -7,14 +7,12 @@ pub mod key_map;
 
 #[derive(Debug)]
 pub struct PublicKey {
-    path: String,
     data: Vec<u8>,
     name: String,
 }
 
 #[derive(Debug)]
 pub struct PrivateKey {
-    path: String,
     data: Vec<u8>,
     name: String,
 }
@@ -50,7 +48,6 @@ struct Key;
 
 impl Key {
     pub fn load_from_file(path: &str) -> Result<Vec<u8>, Error> {
-
         if path.ends_with(".pgp") {
             return Self::load_from_file_pgp(path).context(format!("try to decode key {}", path));
         }
@@ -73,7 +70,8 @@ impl Key {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .stdin(std::process::Stdio::piped())
-            .spawn().context("could not call gpg")?;
+            .spawn()
+            .context("could not call gpg")?;
 
         let mut output_stdout = String::new();
         if let Some(mut stdout) = child.stdout.take() {
@@ -87,7 +85,12 @@ impl Key {
         let status = child.wait()?;
 
         if !status.success() {
-            return Err(anyhow!("could not run gpg --decrypt {}, {}, {}", path, output_stdout, output_stderr));
+            return Err(anyhow!(
+                "could not run gpg --decrypt {}, {}, {}",
+                path,
+                output_stdout,
+                output_stderr
+            ));
         }
 
         Ok(output_stdout.into_bytes())
@@ -97,7 +100,6 @@ impl Key {
 impl PublicKey {
     pub fn load_from_file(path: &str) -> Result<Self, Error> {
         Ok(PublicKey {
-            path: path.to_string(),
             data: Key::load_from_file(path)?,
             name: {
                 let mut pieces = path.rsplit('/');
@@ -127,7 +129,6 @@ impl PublicKey {
 impl PrivateKey {
     pub fn load_from_file(path: &str) -> Result<Self, Error> {
         Ok(PrivateKey {
-            path: path.to_string(),
             data: Key::load_from_file(path)?,
             name: {
                 let mut pieces = path.rsplit('/');
@@ -140,7 +141,10 @@ impl PrivateKey {
                     return Err(anyhow!("private key '{}' does not end with .pem", path));
                 }
 
-                filename.trim_end_matches(".pgp").trim_end_matches(".pem").to_string()
+                filename
+                    .trim_end_matches(".pgp")
+                    .trim_end_matches(".pem")
+                    .to_string()
             },
         })
     }
@@ -148,7 +152,6 @@ impl PrivateKey {
     // is it 100% valid?
     pub fn to_public_key(&self) -> PublicKey {
         PublicKey {
-            path: self.path.clone(),
             data: self.data.clone(),
             name: self.name.clone(),
         }

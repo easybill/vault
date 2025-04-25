@@ -1,46 +1,34 @@
-use anyhow::{anyhow, Context, Error};
+use crate::crypto::CryptedFileContent;
+use anyhow::{Context, Error, anyhow};
 use byteorder::ByteOrder;
 use byteorder::{BigEndian, WriteBytesExt};
-use crate::crypto::CryptedFileContent;
+use std::borrow::Cow;
 use std::io::Read;
 use std::io::Write;
 
 #[derive(Debug)]
-pub struct VaultHeader {
-    version: u16,
-    keyfile_size: usize,
-    secret_bytes_size: usize,
-}
-
-#[derive(Debug)]
-pub struct VaultFile {
-    header: VaultHeader,
-    keyfile_content: Vec<u8>,
-    secret_content: Vec<u8>,
+pub struct VaultFile<'a> {
+    keyfile_content: Cow<'a, [u8]>,
+    secret_content: Cow<'a, [u8]>,
 }
 
 const VAULT_MAGIC_BYTE: u16 = 4242;
 
 const VAULT_HEADER_SIZE: usize = 2 + 2 + 8 + 8;
 
-impl VaultFile {
-    pub fn get_keyfile_content(&self) -> &Vec<u8> {
-        &self.keyfile_content
+impl<'a> VaultFile<'a> {
+    pub fn get_keyfile_content(&self) -> &[u8] {
+        self.keyfile_content.as_ref()
     }
 
-    pub fn get_secret_content(&self) -> &Vec<u8> {
-        &self.secret_content
+    pub fn get_secret_content(&self) -> &[u8] {
+        self.secret_content.as_ref()
     }
 
-    pub fn from_crypted_file_content(file_content: &CryptedFileContent) -> Self {
+    pub fn from_crypted_file_content(file_content: &'a CryptedFileContent) -> Self {
         VaultFile {
-            header: VaultHeader {
-                version: 1,
-                keyfile_size: file_content.get_crypted_password().len(),
-                secret_bytes_size: file_content.get_content().len(),
-            },
-            keyfile_content: file_content.get_crypted_password().to_vec(), // todo, avoid copy
-            secret_content: file_content.get_content().to_vec(),           // todo, avoid copy
+            keyfile_content: Cow::Borrowed(file_content.get_crypted_password()),
+            secret_content: Cow::Borrowed(file_content.get_content()),
         }
     }
 
@@ -51,13 +39,13 @@ impl VaultFile {
             .read_exact(&mut header_buffer)
             .context("could not read header")?;
 
-        let magic_byte: u16 = BigEndian::read_u16(&header_buffer[0..2]);
+        let magic_byte = BigEndian::read_u16(&header_buffer[0..2]);
 
         if magic_byte != VAULT_MAGIC_BYTE {
             return Err(anyhow!("invalid file, magic byte is wrong."));
         }
 
-        let version: u16 = BigEndian::read_u16(&header_buffer[2..4]);
+        let version = BigEndian::read_u16(&header_buffer[2..4]);
 
         if version != 1 {
             return Err(anyhow!("version is not supported."));
@@ -82,13 +70,8 @@ impl VaultFile {
             .context("read secret content")?;
 
         Ok(VaultFile {
-            header: VaultHeader {
-                version,
-                keyfile_size,
-                secret_bytes_size,
-            },
-            keyfile_content,
-            secret_content,
+            keyfile_content: Cow::Owned(keyfile_content),
+            secret_content: Cow::Owned(secret_content),
         })
     }
 
