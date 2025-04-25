@@ -7,7 +7,7 @@ mod tests {
     use std::path::Path;
     use std::process::{Command, Stdio};
 
-    static VAULT_INTEGRATION_TEST_DIR: &str = "vault_integration_test";
+    static TEST_DIR: &str = "vault_integration_test";
 
     fn cmd(
         dir: impl AsRef<Path>,
@@ -47,38 +47,16 @@ mod tests {
     fn test_prepare() {
         cmd(".", "cargo", &["build"], false);
 
-        cmd(".", "rm", &["-rf", VAULT_INTEGRATION_TEST_DIR], false);
-        cmd(".", "mkdir", &["-p", VAULT_INTEGRATION_TEST_DIR], false);
+        cmd(".", "rm", &["-rf", TEST_DIR], false);
+        cmd(".", "mkdir", &["-p", TEST_DIR], false);
 
-        cmd(
-            ".",
-            "cp",
-            &[
-                "./target/debug/vault",
-                &format!("{}/vault", VAULT_INTEGRATION_TEST_DIR),
-            ],
-            false,
-        );
-        cmd(
-            ".",
-            "cp",
-            &["-r", "./fixtures", VAULT_INTEGRATION_TEST_DIR],
-            false,
-        );
-        cmd(
-            VAULT_INTEGRATION_TEST_DIR,
-            "mv",
-            &["./fixtures", ".vault"],
-            false,
-        );
+        let vault_dir = &format!("{}/vault", TEST_DIR);
+        cmd(".", "cp", &["./target/debug/vault", vault_dir], false);
+        cmd(".", "cp", &["-r", "./fixtures", TEST_DIR], false);
+        cmd(TEST_DIR, "mv", &["./fixtures", ".vault"], false);
 
-        cmd(VAULT_INTEGRATION_TEST_DIR, "ls", &["-lah"], false);
-        cmd(
-            VAULT_INTEGRATION_TEST_DIR,
-            "ls",
-            &["-lah", "./.vault"],
-            false,
-        );
+        cmd(TEST_DIR, "ls", &["-lah"], false);
+        cmd(TEST_DIR, "ls", &["-lah", "./.vault"], false);
     }
 
     #[test]
@@ -92,12 +70,7 @@ mod tests {
 
         for valid_secret in &valid_secrets {
             println!("checking {}", valid_secret);
-            let content = cmd(
-                VAULT_INTEGRATION_TEST_DIR,
-                "./vault",
-                &["get", valid_secret],
-                true,
-            );
+            let content = cmd(TEST_DIR, "./vault", &["get", valid_secret], true);
             assert_eq!(format!("{}_CONTENT", valid_secret).into_bytes(), content);
         }
 
@@ -114,16 +87,13 @@ mod tests {
             .collect::<Vec<_>>()
             .join(",");
 
-        let mut file = File::create(format!(
-            "{}/example_template.vault",
-            VAULT_INTEGRATION_TEST_DIR
-        ))
-        .expect("could not create template");
+        let mut file = File::create(format!("{}/example_template.vault", TEST_DIR))
+            .expect("could not create template");
         file.write_all(template.as_bytes())
             .expect("could not write template");
 
         let template_output = cmd(
-            VAULT_INTEGRATION_TEST_DIR,
+            TEST_DIR,
             "./vault",
             &["template", "example_template.vault"],
             true,
@@ -137,7 +107,7 @@ mod tests {
         assert_eq!(
             "VERSION_1_0_0_SECRET_CONTENT",
             String::from_utf8_lossy(&cmd(
-                VAULT_INTEGRATION_TEST_DIR,
+                TEST_DIR,
                 "./vault",
                 &["get", "VERSION_1_0_0_SECRET"],
                 true
@@ -151,7 +121,7 @@ mod tests {
         test_prepare();
 
         let content = cmd(
-            VAULT_INTEGRATION_TEST_DIR,
+            TEST_DIR,
             "./vault",
             &[
                 "get_multi",
@@ -171,7 +141,7 @@ mod tests {
     fn test_integration_rotate_key_and_decode_content() {
         test_prepare();
 
-        let content = cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["rotate"], true);
+        let content = cmd(TEST_DIR, "./vault", &["rotate"], true);
         println!("output: {}", String::from_utf8_lossy(&content));
 
         // delete backup files
@@ -195,14 +165,9 @@ mod tests {
     #[serial]
     fn test_integration_rotate_key_and_read_old_file() {
         test_prepare();
-        cmd(VAULT_INTEGRATION_TEST_DIR, "./vault", &["rotate"], true);
+        cmd(TEST_DIR, "./vault", &["rotate"], true);
 
-        cmd(
-            VAULT_INTEGRATION_TEST_DIR,
-            "rm",
-            &["-rf", "./.vault/secrets"],
-            false,
-        );
+        cmd(TEST_DIR, "rm", &["-rf", "./.vault/secrets"], false);
 
         cmd(
             ".",
@@ -210,7 +175,7 @@ mod tests {
             &[
                 "-r",
                 "./fixtures/secrets",
-                &format!("{}/.vault/secrets", VAULT_INTEGRATION_TEST_DIR),
+                &format!("{}/.vault/secrets", TEST_DIR),
             ],
             false,
         );
