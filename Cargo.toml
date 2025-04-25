@@ -1,23 +1,23 @@
 [package]
 name = "vault"
-version = "1.0.10"
+version = "1.0.11"
 authors = ["timglabisch <glabisch@easybill.de>"]
 edition = "2024"
 
 [dependencies]
-openssl = {version = "0.10.*", features = ["vendored"]}
-toml = "0.*"
-serde_derive = "*"
-serde_json = "*"
-serde = "*"
-clap = "4.*"
-regex = "1.*"
-anyhow = { version = "1.0.*", features = ["backtrace"] }
-byteorder = "1.5.*"
-dirs = "5.*"
-globset = "0.4.*"
-self_update = "0.*"
-semver = "1.*"
+openssl = { version = "0.10", features = ["vendored"] }
+toml = "0.8"
+serde_derive = "1"
+serde_json = "1"
+serde = "1"
+clap = "4"
+regex = "1"
+anyhow = { version = "1", features = ["backtrace"] }
+byteorder = "1"
+dirs = "6"
+globset = "0.4"
+self_update = "0.42"
+semver = "1"
 
 [dev-dependencies]
-serial_test = "*"
+serial_test = "3"
