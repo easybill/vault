@@ -24,12 +24,16 @@ mod key;
 mod proto;
 mod rotate_key;
 mod template;
-mod test_integration;
+
 mod ui;
 
 fn main() -> anyhow::Result<()> {
-    let matches =clap::Command::new("Vault")
-
+    let matches = clap::Command::new("Vault")
+        .arg(
+            Arg::new("yes")
+                .short('y')
+                .help("always answers questions with yes")
+        )
         .arg(
             Arg::new("expect_version")
                 .long("expect_version")
@@ -43,22 +47,22 @@ fn main() -> anyhow::Result<()> {
         )
         .version(cargo_crate_version!())
         .subcommand(
-           clap::Command::new("get").arg(
+            clap::Command::new("get").arg(
                 Arg::new("key")
                     .required(true)
                     .help("lists test values"),
             ),
         )
         .subcommand(
-           clap::Command::new("get_multi")
-            .arg(
-                Arg::new("json")
-                    .required(true)
-                    .help(r#"something like {"secrets": [{"secret": "foo"}], "templates": [{"template": "{vault{ foo }vault}TEST"}]}"#),
-            ),
+            clap::Command::new("get_multi")
+                .arg(
+                    Arg::new("json")
+                        .required(true)
+                        .help(r#"something like {"secrets": [{"secret": "foo"}], "templates": [{"template": "{vault{ foo }vault}TEST"}]}"#),
+                ),
         )
         .subcommand(
-           clap::Command::new("create-openssl-key")
+            clap::Command::new("create-openssl-key")
                 .about("does testing things")
                 .arg(
                     Arg::new("username")
@@ -67,7 +71,7 @@ fn main() -> anyhow::Result<()> {
                 ),
         )
         .subcommand(
-           clap::Command::new("update")
+            clap::Command::new("update")
                 .about("updates vault")
                 .arg(
                     Arg::new("current_version")
@@ -77,7 +81,7 @@ fn main() -> anyhow::Result<()> {
                 ),
         )
         .subcommand(
-           clap::Command::new("template")
+            clap::Command::new("template")
                 .about("does testing things")
                 .arg(
                     Arg::new("filename")
@@ -86,13 +90,17 @@ fn main() -> anyhow::Result<()> {
                 ),
         )
         .subcommand(
-           clap::Command::new("rotate")
+            clap::Command::new("rotate")
                 .about("rotated the private key")
         )
         .subcommand(
-           clap::Command::new("check-keys")
+            clap::Command::new("check-keys")
         )
         .get_matches();
+
+    if let Some(yes) = matches.get_one::<bool>("yes").copied() {
+        Question::set_yes(yes);
+    }
 
     let debug_enable_fetch_raw_secrets_from_env = matches
         .get_one::<String>("i_know_what_i_do__enable_fetch_raw_secrets_from_env")
