@@ -1,6 +1,7 @@
+use crate::Result;
 use crate::key::key_map::KeyMap;
 use crate::template::Template;
-use anyhow::{Context, Error};
+use anyhow::Context;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Write;
@@ -39,8 +40,8 @@ struct OutputJsonItemTemplate {
     pub value: String,
 }
 
-pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<(), Error> {
-    let input: InputJson = serde_json::from_str(input).expect("Fehler beim Deserialisieren");
+pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<()> {
+    let input: InputJson = serde_json::from_str(input).context("Fehler beim Deserialisieren")?;
 
     let mut secrets = HashMap::new();
     let mut errors = vec![];
@@ -59,17 +60,17 @@ pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<(), Error> {
                             },
                         );
                     }
-                    Err(e) => {
+                    Err(error) => {
                         errors.push(format!(
                             "could decode key {}. may it's not valid utf8?, error: {}",
-                            &secret_key.secret, e
+                            &secret_key.secret, error
                         ));
                     }
                 };
             }
-            Err(e) => errors.push(format!(
+            Err(error) => errors.push(format!(
                 "could not decrypt key {}, error: {}",
-                &secret_key.secret, e
+                &secret_key.secret, error
             )),
         };
     }
@@ -88,10 +89,10 @@ pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<(), Error> {
                     },
                 );
             }
-            Err(e) => {
+            Err(error) => {
                 errors.push(format!(
                     "could decode template {}. error: {}",
-                    &template.template, e
+                    &template.template, error
                 ));
             }
         };
@@ -100,7 +101,7 @@ pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<(), Error> {
     if !errors.is_empty() {
         eprintln!("could not decrypt some keys.");
         for error in errors {
-            eprintln!("\t{}", error);
+            eprintln!("\t{error}");
         }
         std::process::exit(1);
     }

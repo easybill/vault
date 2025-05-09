@@ -1,5 +1,6 @@
+use crate::Result;
 use crate::crypto::CryptedFileContent;
-use anyhow::{Context, Error, anyhow};
+use anyhow::{Context, bail};
 use byteorder::ByteOrder;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::borrow::Cow;
@@ -32,7 +33,7 @@ impl<'a> VaultFile<'a> {
         }
     }
 
-    pub fn open(mut content: impl Read) -> Result<Self, Error> {
+    pub fn open(mut content: impl Read) -> Result<Self> {
         let mut header_buffer = vec![0; VAULT_HEADER_SIZE];
 
         content
@@ -42,13 +43,13 @@ impl<'a> VaultFile<'a> {
         let magic_byte = BigEndian::read_u16(&header_buffer[0..2]);
 
         if magic_byte != VAULT_MAGIC_BYTE {
-            return Err(anyhow!("invalid file, magic byte is wrong."));
+            bail!("invalid file, magic byte is wrong.");
         }
 
         let version = BigEndian::read_u16(&header_buffer[2..4]);
 
         if version != 1 {
-            return Err(anyhow!("version is not supported."));
+            bail!("version is not supported.");
         }
 
         let keyfile_size = BigEndian::read_u64(&header_buffer[4..12]) as usize;
@@ -56,7 +57,7 @@ impl<'a> VaultFile<'a> {
 
         if keyfile_size > 50_000 || secret_bytes_size > 1_000_000_000 {
             // ensure nobody kills us with a wrong vault file :)
-            return Err(anyhow!("keysize is not supported."));
+            bail!("keysize is not supported.");
         }
 
         let mut keyfile_content = vec![0; keyfile_size];
@@ -75,19 +76,19 @@ impl<'a> VaultFile<'a> {
         })
     }
 
-    pub fn write(&self, mut to: impl Write) -> Result<(), Error> {
+    pub fn write(&self, mut to: impl Write) -> Result<()> {
         to.write_u16::<BigEndian>(VAULT_MAGIC_BYTE)
-            .context(anyhow!("could not write magic byte"))?;
+            .context("could not write magic byte")?;
         to.write_u16::<BigEndian>(1)
-            .context(anyhow!("could not write version"))?;
+            .context("could not write version")?;
         to.write_u64::<BigEndian>(self.keyfile_content.len() as u64)
-            .context(anyhow!("could not write keyfile"))?;
+            .context("could not write keyfile")?;
         to.write_u64::<BigEndian>(self.secret_content.len() as u64)
-            .context(anyhow!("could not write secret"))?;
+            .context("could not write secret")?;
         to.write_all(&self.keyfile_content)
-            .context(anyhow!("could not write keyfile content"))?;
+            .context("could not write keyfile content")?;
         to.write_all(&self.secret_content)
-            .context(anyhow!("could not write secret content"))?;
+            .context("could not write secret content")?;
 
         Ok(())
     }

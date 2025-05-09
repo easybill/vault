@@ -1,5 +1,6 @@
+use crate::Result;
 use crate::fs;
-use anyhow::{Error, anyhow};
+use anyhow::anyhow;
 use std::path::Path;
 
 pub struct Filesystem;
@@ -59,10 +60,10 @@ impl Filesystem {
         FilesystemCheckResult::new_ok()
     }
 
-    pub fn create_basic_directory_structure() -> Result<(), Error> {
+    pub fn create_basic_directory_structure() -> Result<()> {
         for dir in Self::get_basic_directories().iter() {
             fs::create_dir_all(dir)
-                .map_err(|e| anyhow!("could not create directory {}, {}", &dir, e))?
+                .map_err(|error| anyhow!("could not create directory {dir}, {error}"))?
         }
 
         Ok(())
