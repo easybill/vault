@@ -1,12 +1,13 @@
+use crate::Result;
 use crate::create_keys;
 use crate::key::key_map::{KeyMap, KeyMapConfig, Subscription};
 use crate::ui::question::Question;
-use anyhow::{Context, Error, anyhow};
+use anyhow::{Context, anyhow, bail};
 use std::fs;
 use std::fs::{remove_dir, remove_file};
 use std::time::SystemTime;
 
-pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<(), Error> {
+pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<()> {
     let keymap = KeyMap::from_path(keymap_config)?;
 
     let pems = keymap
@@ -42,7 +43,7 @@ pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<(), Error> {
     Ok(())
 }
 
-fn rename_user(username_from: &str, username_to: &str) -> Result<(), Error> {
+fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
     struct Rename {
         from: String,
         to: String,
@@ -108,31 +109,27 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<(), Error> {
             ));
         }
 
-        match fs::rename(&rename.from, &rename.to) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(anyhow!(
-                    "could not copy from {} to {}, error: {}",
-                    &rename.from,
-                    &rename.to,
-                    e
-                ));
-            }
-        };
+        fs::rename(&rename.from, &rename.to).map_err(|error| {
+            anyhow!(
+                "could not copy from {} to {}, error: {}",
+                &rename.from,
+                &rename.to,
+                error
+            )
+        })?;
     }
 
     Ok(())
 }
 
-fn delete_user(username: &str) -> Result<(), Error> {
+fn delete_user(username: &str) -> Result<()> {
     // delete all secrets
 
     let secret_directory_path = "./.vault/secrets/";
 
-    let secret_directory_path_readdir = fs::read_dir(secret_directory_path).context(format!(
-        "could not read subscription path. directory is missing? {}",
-        &secret_directory_path
-    ))?;
+    let secret_directory_path_readdir = fs::read_dir(secret_directory_path).with_context(|| {
+        format!("could not read subscription path. directory is missing? {secret_directory_path}")
+    })?;
 
     for path in secret_directory_path_readdir {
         let path = path.context("could not read directory")?;
@@ -151,7 +148,7 @@ fn delete_user(username: &str) -> Result<(), Error> {
         }
 
         remove_file(&crypt_file_path)
-            .context(format!("could not remove file {}", &secret_directory_path))?;
+            .with_context(|| format!("could not remove file {secret_directory_path}"))?;
     }
 
     // delete key folder
@@ -159,13 +156,14 @@ fn delete_user(username: &str) -> Result<(), Error> {
 
     if let Ok(metadata) = fs::metadata(&keys_directory) {
         if !metadata.is_dir() {
-            return Err(anyhow!("key folder is no folder {}", &keys_directory));
+            bail!("key folder is no folder {keys_directory}");
         }
 
-        let dir = fs::read_dir(&keys_directory).context(format!(
-            "could not read subscription path. directory is missing? {}",
-            &secret_directory_path
-        ))?;
+        let dir = fs::read_dir(&keys_directory).with_context(|| {
+            format!(
+                "could not read subscription path. directory is missing? {secret_directory_path}"
+            )
+        })?;
 
         for dir_entry in dir {
             let dir_entry = dir_entry?;
@@ -173,18 +171,21 @@ fn delete_user(username: &str) -> Result<(), Error> {
                 continue;
             }
 
-            remove_file(dir_entry.path()).context(format!(
-                "could not remove path {}",
-                dir_entry.path().to_string_lossy()
-            ))?
+            remove_file(dir_entry.path()).with_context(|| {
+                format!(
+                    "could not remove path {}",
+                    dir_entry.path().to_string_lossy()
+                )
+            })?
         }
 
-        remove_dir(&keys_directory).context(format!("could not remove path {}", &keys_directory))?
+        remove_dir(&keys_directory)
+            .with_context(|| format!("could not remove path {keys_directory}"))?
     }
 
     let timestamp = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         Ok(n) => n.as_secs(),
-        Err(_) => unreachable!(),
+        Err(_) => bail!("SystemTime before UNIX_EPOCH"),
     };
 
     let _ = fs::rename(
@@ -205,13 +206,12 @@ fn delete_user(username: &str) -> Result<(), Error> {
     Ok(())
 }
 
-fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<(), Error> {
+fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<()> {
     let secret_directory_path = "./.vault/secrets/";
 
-    let secret_directory_path_readdir = fs::read_dir(secret_directory_path).context(format!(
-        "could not read subscription path. directory is missing? {}",
-        &secret_directory_path
-    ))?;
+    let secret_directory_path_readdir = fs::read_dir(secret_directory_path).with_context(|| {
+        format!("could not read subscription path. directory is missing? {secret_directory_path}")
+    })?;
 
     for path in secret_directory_path_readdir {
         let path = path.context("could not read directory")?;
@@ -234,7 +234,7 @@ fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<(
                     secret_name, username_rotated
                 );
                 if fs::metadata(&crypt_file_path).is_ok() {
-                    return Err(anyhow!("could not read secret {}", crypt_file_path));
+                    bail!("could not read secret {}", crypt_file_path);
                 }
             }
         }

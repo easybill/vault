@@ -1,5 +1,6 @@
+use crate::Result;
 use crate::key::key_map::KeyMap;
-use anyhow::{Context, Error, anyhow};
+use anyhow::{Context, anyhow};
 use regex::Regex;
 use std::fs::File;
 use std::io::Read;
@@ -13,15 +14,15 @@ impl<'a> Template<'a> {
         Template { keymap }
     }
 
-    pub fn parse_from_file(&self, filename: &str) -> Result<String, Error> {
+    pub fn parse_from_file(&self, filename: &str) -> Result<String> {
         let file_content = {
-            let mut f =
-                File::open(filename).context(anyhow!("could not open tempalte {}.", &filename))?;
+            let mut f = File::open(filename)
+                .with_context(|| format!("could not open template {filename}."))?;
 
             let mut buffer = String::new();
 
             f.read_to_string(&mut buffer)
-                .context(anyhow!("could not read content of template {}", &filename))?;
+                .with_context(|| format!("could not read content of template {filename}"))?;
 
             buffer
         };
@@ -29,7 +30,7 @@ impl<'a> Template<'a> {
         self.parse_from_str(&file_content)
     }
 
-    pub fn parse_from_str(&self, template: &str) -> Result<String, Error> {
+    pub fn parse_from_str(&self, template: &str) -> Result<String> {
         let mut file_content = template.to_string();
 
         {
@@ -41,19 +42,18 @@ impl<'a> Template<'a> {
             for capture in captures {
                 let from = capture
                     .get(0)
-                    .ok_or_else(|| anyhow!("could not extract capture"))?
+                    .context("could not extract capture")?
                     .as_str();
 
                 let key = capture
                     .get(1)
-                    .ok_or_else(|| anyhow!("could not extract capture"))?
+                    .context("could not extract capture")?
                     .as_str()
                     .trim()
                     .to_string();
 
-                let uncrypted_key = self.keymap.decrypt_to_string(&key).context(format!(
-                    "template requires the key \"{}\", but it's not possible to decrypt the key",
-                    key.clone()
+                let uncrypted_key = self.keymap.decrypt_to_string(&key).with_context(|| format!(
+                    "template requires the key \"{key}\", but it's not possible to decrypt the key"
                 ))?;
 
                 file_content = file_content.replace(from, &uncrypted_key);

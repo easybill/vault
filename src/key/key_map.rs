@@ -1,10 +1,11 @@
+use crate::Result;
 use crate::crypto::Crypto;
 use crate::crypto::UncryptedVaultFile;
 use crate::key::Pem;
 use crate::key::PrivateKey;
 use crate::key::PublicKey;
 use crate::proto::VaultFile;
-use anyhow::{Context, Error, anyhow};
+use anyhow::{Context, anyhow, bail};
 use globset::Glob;
 use serde_derive::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -67,7 +68,7 @@ impl Subscription {
 }
 
 impl KeyMap {
-    pub fn build_keys_from_path(root_path: &Path) -> Result<Vec<PublicKey>, Error> {
+    pub fn build_keys_from_path(root_path: &Path) -> Result<Vec<PublicKey>> {
         let mut buffer = vec![];
 
         let paths = fs::read_dir(root_path).context("could not read user path")?;
@@ -80,17 +81,15 @@ impl KeyMap {
             }
 
             buffer.push(
-                PublicKey::load_from_file(&path.display().to_string()).context(anyhow!(
-                    "could not load public key {}",
-                    &path.display().to_string()
-                ))?,
+                PublicKey::load_from_file(&path.display().to_string())
+                    .with_context(|| format!("could not load public key {}", path.display()))?,
             );
         }
 
         Ok(buffer)
     }
 
-    pub fn get_subsciptions(config: &ConfigToml) -> Result<Vec<String>, Error> {
+    pub fn get_subsciptions(config: &ConfigToml) -> Result<Vec<String>> {
         // read the content of ./.vault/secrets/ to find secrets that are matching a glob pattern.
         let available_secrets = {
             let mut buffer = vec![];
@@ -116,9 +115,7 @@ impl KeyMap {
 
                 let filename = match entry.file_name().to_str() {
                     None => {
-                        return Err(anyhow!(
-                            "invalid filename encoding in entry in ./.vault/secrets/"
-                        ));
+                        bail!("invalid filename encoding in entry in ./.vault/secrets/");
                     }
                     Some(s) => s.to_string(),
                 };
@@ -137,10 +134,7 @@ impl KeyMap {
 
             // we've a glob pattern...
             let glob_matcher = Glob::new(raw_subscription)
-                .context(format!(
-                    "error when compiling glob pattern {}",
-                    raw_subscription
-                ))?
+                .with_context(|| format!("error when compiling glob pattern {raw_subscription}"))?
                 .compile_matcher();
             for available_secret in available_secrets.iter() {
                 if !glob_matcher.is_match(available_secret) {
@@ -157,7 +151,7 @@ impl KeyMap {
     pub fn build_subscriptions(
         username: &str,
         config: &ConfigToml,
-    ) -> Result<HashMap<String, Subscription>, Error> {
+    ) -> Result<HashMap<String, Subscription>> {
         let mut buffer = HashMap::new();
 
         for raw_subscription in
@@ -185,15 +179,17 @@ impl KeyMap {
         Ok(buffer)
     }
 
-    pub fn build_private_pems(config: &KeyMapConfig) -> Result<Vec<Pem>, Error> {
+    pub fn build_private_pems(config: &KeyMapConfig) -> Result<Vec<Pem>> {
         let mut buffer = vec![];
 
         let mut lookup_paths = vec![];
 
-        lookup_paths.push(fs::read_dir(&config.path_private_key).context(anyhow!(
-            "private key directory {} is not readable",
-            &config.path_private_key
-        ))?);
+        lookup_paths.push(fs::read_dir(&config.path_private_key).with_context(|| {
+            format!(
+                "private key directory {} is not readable",
+                &config.path_private_key
+            )
+        })?);
 
         if let Some(home_dir) = dirs::home_dir() {
             if let Ok(home_path) = fs::read_dir(home_dir.join(".vault/private_keys")) {
@@ -227,7 +223,7 @@ impl KeyMap {
                         continue;
                     }
 
-                    eprintln!("info: unexpected file {}", &path_as_string);
+                    eprintln!("info: unexpected file {path_as_string}");
                     continue;
                 }
 
@@ -245,22 +241,18 @@ impl KeyMap {
                 };
 
                 if !file_exists {
-                    return Err(anyhow!(
-                        "private key given at: {} but public key is not found at: {}",
-                        &path_as_string,
-                        &public_key_path
-                    ));
+                    bail!(
+                        "private key given at: {path_as_string} but public key is not found at: {public_key_path}",
+                    );
                 }
 
                 buffer.push(Pem::new(
-                    PrivateKey::load_from_file(&path_as_string).context(format!(
-                        "failed, to add key, private key: {}",
-                        &path_as_string
-                    ))?,
-                    PublicKey::load_from_file(&public_key_path).context(format!(
-                        "failed, to add key, private key: {}",
-                        &path_as_string
-                    ))?,
+                    PrivateKey::load_from_file(&path_as_string).with_context(|| {
+                        format!("failed, to add key, private key: {path_as_string}")
+                    })?,
+                    PublicKey::load_from_file(&public_key_path).with_context(|| {
+                        format!("failed, to add key, private key: {path_as_string}")
+                    })?,
                 ));
             }
         }
@@ -268,17 +260,17 @@ impl KeyMap {
         Ok(buffer)
     }
 
-    pub fn from_path(config: &KeyMapConfig) -> Result<KeyMap, Error> {
+    pub fn from_path(config: &KeyMapConfig) -> Result<KeyMap> {
         let mut buffer = vec![];
 
         let paths = fs::read_dir("./.vault/keys")
-            .map_err(|e| anyhow!("could not read ./vault/keys, {}", e))?;
+            .map_err(|error| anyhow!("could not read ./vault/keys, {error}"))?;
 
         for path in paths {
             let user_path = match path {
-                Err(e) => return Err(anyhow!("could not decode user path {}", e)),
-                Ok(k) => {
-                    let path = k.path();
+                Err(error) => bail!("could not decode user path {error}"),
+                Ok(dir_entry) => {
+                    let path = dir_entry.path();
 
                     if !path.is_dir() {
                         continue;
@@ -297,20 +289,20 @@ impl KeyMap {
 
             let config_file_path = user_path.join("config.toml");
             let raw_config = {
-                let mut f = File::open(&config_file_path).map_err(|e| {
+                let mut f = File::open(&config_file_path).map_err(|error| {
                     anyhow!(
                         "could not open config file {}, {}",
                         config_file_path.display(),
-                        e
+                        error
                     )
                 })?;
 
                 let mut content = String::new();
-                f.read_to_string(&mut content).map_err(|e| {
+                f.read_to_string(&mut content).map_err(|error| {
                     anyhow!(
                         "could not read config file {}, {}",
                         config_file_path.display(),
-                        e
+                        error
                     )
                 })?;
 
@@ -338,74 +330,55 @@ impl KeyMap {
         })
     }
 
-    pub fn decrypt_subscription(
-        &self,
-        subscription: &Subscription,
-    ) -> Result<UncryptedVaultFile, Error> {
+    pub fn decrypt_subscription(&self, subscription: &Subscription) -> Result<UncryptedVaultFile> {
         self.decrypt(subscription.get_name())
     }
 
     pub fn decrypt_subscription_string(
         &self,
         subscription: &Subscription,
-    ) -> Result<UncryptedVaultFile, Error> {
+    ) -> Result<UncryptedVaultFile> {
         self.decrypt(subscription.get_name())
     }
 
-    pub fn decrypt_to_string(&self, subscription_key: &str) -> Result<String, Error> {
+    pub fn decrypt_to_string(&self, subscription_key: &str) -> Result<String> {
         let decrypted = self
             .decrypt(subscription_key)
-            .context(anyhow!("could not decrypt {}", subscription_key))?;
+            .with_context(|| format!("could not decrypt {subscription_key}"))?;
 
-        String::from_utf8(decrypted.get_content().to_vec()).context(anyhow!("Invalid Utf8"))
+        String::from_utf8(decrypted.get_content().to_vec()).context("Invalid Utf8")
     }
 
     pub fn decrypt_debug_enable_fetch_raw_secrets_from_env(
         &self,
         subscription_key: &str,
-    ) -> Result<UncryptedVaultFile, Error> {
+    ) -> Result<UncryptedVaultFile> {
         let decrypt_user = self
             .debug_enable_fetch_raw_secrets_from_env
             .as_ref()
             .expect("decrypt user must be given");
+
         let secret_path = format!(
             "./.vault/secrets/{}/{}.crypt",
             subscription_key, decrypt_user
         );
 
-        let crypt_file = match fs::metadata(&secret_path) {
-            Ok(k) => k,
-            Err(_err) => {
-                return Err(anyhow!(
-                    "could not find key - crypt file {} does not exist",
-                    &secret_path
-                ));
-            }
-        };
+        let crypt_file = fs::metadata(&secret_path)
+            .map_err(|_| anyhow!("could not find key - crypt file {secret_path} does not exist"))?;
 
         if !crypt_file.is_file() {
-            return Err(anyhow!(
-                "could not find key - crypt file {} is not a file",
-                &secret_path
-            ));
+            bail!("could not find key - crypt file {secret_path} is not a file");
         }
 
         let env_var = format!("VAULT_DEBUG_SECRET_{}", subscription_key);
-        let secret = match std::env::var(&env_var) {
-            Ok(k) => k,
-            Err(e) => {
-                return Err(anyhow!(
-                    "could not find key - could not read env var {}, error: {}",
-                    &env_var,
-                    e
-                ));
-            }
-        };
+        let secret = std::env::var(&env_var).map_err(|error| {
+            anyhow!("could not find key - could not read env var {env_var}, error: {error}")
+        })?;
 
         Ok(UncryptedVaultFile::new(secret.into_bytes()))
     }
 
-    pub fn decrypt(&self, subscription_key: &str) -> Result<UncryptedVaultFile, Error> {
+    pub fn decrypt(&self, subscription_key: &str) -> Result<UncryptedVaultFile> {
         if self.debug_enable_fetch_raw_secrets_from_env.is_some() {
             return self.decrypt_debug_enable_fetch_raw_secrets_from_env(subscription_key);
         }
@@ -415,10 +388,9 @@ impl KeyMap {
 
             let secret_path = format!("./.vault/secrets/{}", subscription_key);
 
-            let paths = fs::read_dir(&secret_path).context(anyhow!(
-                "could not read subscription path. directory is missing? {}",
-                &secret_path
-            ))?;
+            let paths = fs::read_dir(&secret_path).with_context(|| {
+                format!("could not read subscription path. directory is missing? {secret_path}")
+            })?;
 
             for path in paths {
                 let path_as_string = path
@@ -432,10 +404,7 @@ impl KeyMap {
                 }
 
                 if !path_as_string.ends_with(".crypt") {
-                    eprintln!(
-                        "warning: found a invalid file {} in secrets.",
-                        &path_as_string
-                    );
+                    eprintln!("warning: found a invalid file {path_as_string} in secrets.");
                     continue;
                 }
 
@@ -448,7 +417,8 @@ impl KeyMap {
         for pem in &self.pems {
             for file in &possible_files {
                 let vault_file = {
-                    let f = File::open(file).context(anyhow!("could not read file {}", file))?;
+                    let f =
+                        File::open(file).with_context(|| format!("could not read file {file}"))?;
 
                     VaultFile::open(f).context("could not create vault file.")?
                 };
@@ -470,11 +440,13 @@ impl KeyMap {
         self.decrypt_subscription(subscription).is_ok()
     }
 
-    pub fn fulfill_subscription(&self, subscription: &Subscription) -> Result<(), Error> {
-        let uncrypted_vault_file = self.decrypt_subscription(subscription).context(anyhow!(
-            "could not decrypt subscription {}.",
-            subscription.get_name()
-        ))?;
+    pub fn fulfill_subscription(&self, subscription: &Subscription) -> Result<()> {
+        let uncrypted_vault_file = self.decrypt_subscription(subscription).with_context(|| {
+            format!(
+                "could not decrypt subscription {}.",
+                subscription.get_name()
+            )
+        })?;
 
         let public_keys_for_user: &Vec<PublicKey> = {
             let mut keys = None;
@@ -493,7 +465,7 @@ impl KeyMap {
         .ok_or_else(|| anyhow!("could not find keys for user"))?;
 
         if public_keys_for_user.is_empty() {
-            panic!("could not found key for user");
+            bail!("could not found key for user");
         }
 
         for public_key in public_keys_for_user.iter() {
@@ -507,16 +479,15 @@ impl KeyMap {
 
             // neue vaultfile erstellen ....
 
-            let crypted_file_content = Crypto::encrypt(public_key, &uncrypted_vault_file).context(
-                anyhow!("could not crypt data using key {}", public_key.get_name()),
-            )?;
+            let crypted_file_content = Crypto::encrypt(public_key, &uncrypted_vault_file)
+                .with_context(|| {
+                    format!("could not crypt data using key {}", public_key.get_name())
+                })?;
 
             let vault_file = VaultFile::from_crypted_file_content(&crypted_file_content);
 
-            let mut f = File::create(&new_filename).context(anyhow!(
-                "could not create new crypted file {}",
-                &new_filename
-            ))?;
+            let mut f = File::create(&new_filename)
+                .with_context(|| format!("could not create new crypted file {new_filename}"))?;
 
             vault_file
                 .write(&mut f)
@@ -546,47 +517,48 @@ impl KeyMap {
         buffer
     }
 
-    pub fn add_new_secet(&self, filepath: &str) -> Result<(), Error> {
+    pub fn add_new_secet(&self, filepath: &str) -> Result<()> {
         let pem = self
             .get_private_pems()
             .first()
-            .ok_or_else(|| anyhow!("you've no private key, no idea how to crypt {}", filepath))?;
+            .with_context(|| format!("you've no private key, no idea how to crypt {filepath}"))?;
 
         let file_content = {
-            let mut f = File::open(filepath).context(anyhow!("could not open {}", filepath))?;
+            let mut f =
+                File::open(filepath).with_context(|| format!("could not open {filepath}"))?;
 
             let mut content = vec![];
-            f.read_to_end(&mut content)
-                .context(anyhow!("could not read file"))?;
+            f.read_to_end(&mut content).context("could not read file")?;
 
             content
         };
 
         let uncrypted_file = UncryptedVaultFile::new(file_content);
 
-        let crypted_file_content =
-            Crypto::encrypt(pem.get_public_key(), &uncrypted_file).context(anyhow!(
-                "encryption of {} failed with key {}",
-                &filepath,
-                pem.get_name()
-            ))?;
+        let crypted_file_content = Crypto::encrypt(pem.get_public_key(), &uncrypted_file)
+            .with_context(|| {
+                format!(
+                    "encryption of {} failed with key {}",
+                    &filepath,
+                    pem.get_name()
+                )
+            })?;
 
-        fs::remove_file(filepath).context(anyhow!("could not remove file {}", filepath))?;
+        fs::remove_file(filepath).with_context(|| format!("could not remove file {filepath}"))?;
 
-        fs::create_dir(filepath).context(anyhow!("could not create new directory {}", filepath))?;
+        fs::create_dir(filepath)
+            .with_context(|| format!("could not create new directory {filepath}"))?;
 
         let new_filename = format!("{}/{}.crypt", filepath, pem.get_name());
 
         let vault_file = VaultFile::from_crypted_file_content(&crypted_file_content);
 
-        let mut f = File::create(&new_filename).context(anyhow!(
-            "could not create new crypted file {}",
-            &new_filename
-        ))?;
+        let mut f = File::create(&new_filename)
+            .with_context(|| format!("could not create new crypted file {new_filename}"))?;
 
         vault_file
             .write(&mut f)
-            .context(anyhow!("could not write to file {}", &new_filename))?;
+            .with_context(|| format!("could not write to file {new_filename}"))?;
 
         Ok(())
     }
