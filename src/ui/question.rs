@@ -50,8 +50,8 @@ impl Question {
             {
                 "y" | "j" => return true,
                 "n" => return false,
-                c => {
-                    eprintln!("unecpected char \"{}\" - reask.", c);
+                chars => {
+                    eprintln!("unexpected char \"{chars}\" - reask.");
                     continue;
                 }
             };

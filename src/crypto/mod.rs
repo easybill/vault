@@ -1,7 +1,8 @@
+use crate::Result;
 use crate::key::Pem;
 use crate::key::PublicKey;
 use crate::proto::VaultFile;
-use anyhow::{Context, Error, anyhow};
+use anyhow::{Context, anyhow, bail};
 use openssl::rand::rand_bytes;
 use openssl::rsa::{Padding, Rsa};
 use openssl::symm::{Cipher, decrypt, encrypt};
@@ -43,7 +44,7 @@ impl Crypto {
     pub fn encrypt(
         public_key: &PublicKey,
         uncrypted_vault_file: &UncryptedVaultFile,
-    ) -> Result<CryptedFileContent, Error> {
+    ) -> Result<CryptedFileContent> {
         // at first we need a password, we store the password in the "key"
         let mut password = [0; 256 / 8];
         rand_bytes(&mut password)
@@ -75,7 +76,7 @@ impl Crypto {
         })
     }
 
-    pub fn decrypt(pem: &Pem, crypted_vault_file: &VaultFile) -> Result<UncryptedVaultFile, Error> {
+    pub fn decrypt(pem: &Pem, crypted_vault_file: &VaultFile) -> Result<UncryptedVaultFile> {
         // at first we need to extract the password using the private key.
         let password: Vec<u8> = Self::key_decrypt(pem, crypted_vault_file.get_keyfile_content())
             .context("could not decrypt password using private key")?;
@@ -83,9 +84,7 @@ impl Crypto {
         let cipher = Cipher::aes_256_cbc();
 
         if crypted_vault_file.get_secret_content().len() < 128 / 8 {
-            return Err(anyhow!(
-                "crypted size is to small, couldnt read enought for IV"
-            ));
+            bail!("crypted size is to small, couldnt read enought for IV");
         }
 
         let iv = &crypted_vault_file.get_secret_content()[0..128 / 8];
@@ -98,9 +97,9 @@ impl Crypto {
         Ok(UncryptedVaultFile { content })
     }
 
-    pub fn key_encrypt(public_key: &PublicKey, data: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn key_encrypt(public_key: &PublicKey, data: &[u8]) -> Result<Vec<u8>> {
         let rsa = openssl::rsa::Rsa::public_key_from_pem(public_key.get_data())
-            .context(anyhow!("invalid public key {}", &public_key.get_name()))?;
+            .with_context(|| format!("invalid public key {}", &public_key.get_name()))?;
 
         //let rsa = Rsa::public_key_from_pem(&self.public_key).map_err(|_| { "invalid public key".to_string() })?;
         let mut encrypted_data: Vec<u8> = vec![0; rsa.size() as usize];
@@ -108,12 +107,12 @@ impl Crypto {
         // look at http://php.net/manual/de/function.openssl-public-encrypt.php
         let _ = rsa
             .public_encrypt(data, encrypted_data.as_mut_slice(), Padding::PKCS1)
-            .context(anyhow!("could not encrypt"))?;
+            .context("could not encrypt")?;
 
         Ok(encrypted_data)
     }
 
-    pub fn key_decrypt(pem: &Pem, data: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn key_decrypt(pem: &Pem, data: &[u8]) -> Result<Vec<u8>> {
         let rsa = Rsa::private_key_from_pem(pem.get_private_key().get_data())
             .context("invalid private key")?;
 
