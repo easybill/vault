@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow, bail, format_err};
+use anyhow::{Context, bail};
 
 use clap::Arg;
 
@@ -29,7 +29,14 @@ mod ui;
 
 type Result<T> = anyhow::Result<T>;
 
-fn main() -> anyhow::Result<()> {
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("Vault error: {error}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     let matches = clap::Command::new("Vault")
         .arg(
             Arg::new("yes")
@@ -116,11 +123,9 @@ fn main() -> anyhow::Result<()> {
             .context("could not parse current version, should not happen")?;
 
         if !version_requirement.matches(&version_current) {
-            eprintln!(
-                "probably a coworker wants to prevent this vault version from being used. maybe there was a bug in vault or a feature is being used that is only available in this version."
+            bail!(
+                "probably a coworker wants to prevent this vault version from being used. maybe there was a bug in vault or a feature is being used that is only available in this version. may you want to run vault update to upgrade to the latest version."
             );
-            eprintln!("may you want to run vault update to upgrade to the latest version.");
-            std::process::exit(1);
         }
     }
 
@@ -128,11 +133,7 @@ fn main() -> anyhow::Result<()> {
         FilesystemCheckResult::IsOk => {}
         FilesystemCheckResult::IsNotInstalled => enter_filesystem_wizard()?,
         FilesystemCheckResult::HasErrors(ref errors) => {
-            eprintln!("issues with the filesystem.");
-            for error in errors {
-                eprintln!(" error: {error}");
-            }
-            std::process::exit(1);
+            bail!("issues with the filesystem, e.g. a basic directory could be missing\n{}", errors.join("\n"));
         }
     };
 
@@ -148,8 +149,7 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(_matches) = matches.subcommand_matches("check-keys") {
         if keymap.get_private_pems().is_empty() {
-            eprintln!("there is no private key");
-            std::process::exit(1);
+            bail!("there is no private key");
         }
 
         println!("keys are fine");
@@ -160,17 +160,10 @@ fn main() -> anyhow::Result<()> {
     if let Some(matches) = matches.subcommand_matches("get") {
         let key = matches.get_one::<String>("key").expect("key must exists");
 
-        match keymap.decrypt(key) {
-            Ok(k) => {
-                use std::io::Write;
-                std::io::stdout().write_all(k.get_content())?;
-                return Ok(());
-            }
-            Err(error) => {
-                eprintln!("Error: {error}");
-                std::process::exit(1);
-            }
-        }
+        let decrypted = keymap.decrypt(key)?;
+        use std::io::Write;
+        std::io::stdout().write_all(decrypted.get_content())?;
+        return Ok(());
     }
 
     if let Some(matches) = matches.subcommand_matches("get_multi") {
@@ -185,18 +178,11 @@ fn main() -> anyhow::Result<()> {
     if let Some(matches) = matches.subcommand_matches("template") {
         let filename = matches
             .get_one::<String>("filename")
-            .expect("filename must exists");
+            .expect("filename must exist");
 
         let template = Template::new(&keymap);
-        match template.parse_from_file(filename) {
-            Ok(c) => {
-                print!("{}", c);
-            }
-            Err(error) => {
-                eprintln!("Error: {error}");
-                std::process::exit(1);
-            }
-        }
+        let value = template.parse_from_file(filename)?;
+        print!("{}", value);
 
         return Ok(());
     }
@@ -225,7 +211,7 @@ fn main() -> anyhow::Result<()> {
     if let Some(matches) = matches.subcommand_matches("create-openssl-key") {
         let username = matches
             .get_one::<String>("username")
-            .expect("username must exists");
+            .expect("username must exist");
 
         create_keys(username)?;
 
