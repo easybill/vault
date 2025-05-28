@@ -1,4 +1,4 @@
-use anyhow::{Context, Error, anyhow};
+use anyhow::{Context, Error, bail};
 use std::fs::File;
 use std::io::Read;
 use std::process::Command;
@@ -7,14 +7,14 @@ pub mod key_map;
 
 #[derive(Debug)]
 pub struct PublicKey {
-    data: Vec<u8>,
-    name: String,
+    pub(crate) data: Vec<u8>,
+    pub(crate) name: String,
 }
 
 #[derive(Debug)]
 pub struct PrivateKey {
-    data: Vec<u8>,
-    name: String,
+    pub(crate) data: Vec<u8>,
+    pub(crate) name: String,
 }
 
 #[derive(Debug)]
@@ -49,14 +49,15 @@ struct Key;
 impl Key {
     pub fn load_from_file(path: &str) -> Result<Vec<u8>, Error> {
         if path.ends_with(".pgp") {
-            return Self::load_from_file_pgp(path).context(format!("try to decode key {}", path));
+            return Self::load_from_file_pgp(path)
+                .with_context(|| format!("try to decode key {path}"));
         }
 
-        let mut f = File::open(path).context(format!("open file {}", path))?;
+        let mut f = File::open(path).with_context(|| format!("open file {path}"))?;
         let mut content: Vec<u8> = vec![];
 
         f.read_to_end(&mut content)
-            .context(format!("could not read file {}", path))?;
+            .with_context(|| format!("could not read file {path}"))?;
 
         Ok(content)
     }
@@ -85,12 +86,7 @@ impl Key {
         let status = child.wait()?;
 
         if !status.success() {
-            return Err(anyhow!(
-                "could not run gpg --decrypt {}, {}, {}",
-                path,
-                output_stdout,
-                output_stderr
-            ));
+            bail!("could not run gpg --decrypt {path}, {output_stdout}, {output_stderr}");
         }
 
         Ok(output_stdout.into_bytes())
@@ -99,30 +95,34 @@ impl Key {
 
 impl PublicKey {
     pub fn load_from_file(path: &str) -> Result<Self, Error> {
+        const FILE_EXTENSION: &str = ".pub.pem";
+
         Ok(PublicKey {
             data: Key::load_from_file(path)?,
             name: {
                 let mut pieces = path.rsplit('/');
-                let filename: String = match pieces.next() {
+                let mut filename: String = match pieces.next() {
                     Some(p) => p.into(),
                     None => path.into(),
                 };
 
-                if !filename.ends_with(".pub.pem") {
-                    return Err(anyhow!("public key '{}' does not end with .pub.pem", path));
+                if !filename.ends_with(FILE_EXTENSION) {
+                    bail!("public key '{path}' does not end with {FILE_EXTENSION}");
                 }
 
-                filename[..filename.len() - 8].to_string()
+                filename.truncate(filename.len() - FILE_EXTENSION.len());
+
+                filename
             },
         })
     }
 
-    pub fn get_data(&self) -> &Vec<u8> {
-        &self.data
+    pub fn get_data(&self) -> &[u8] {
+        self.data.as_slice()
     }
 
     pub fn get_name(&self) -> &str {
-        &self.name
+        self.name.as_str()
     }
 }
 
@@ -138,7 +138,7 @@ impl PrivateKey {
                 };
 
                 if !filename.trim_end_matches(".pgp").ends_with(".pem") {
-                    return Err(anyhow!("private key '{}' does not end with .pem", path));
+                    bail!("private key '{path}' does not end with .pem");
                 }
 
                 filename
@@ -157,11 +157,11 @@ impl PrivateKey {
         }
     }
 
-    pub fn get_data(&self) -> &Vec<u8> {
-        &self.data
+    pub fn get_data(&self) -> &[u8] {
+        self.data.as_slice()
     }
 
     pub fn get_name(&self) -> &str {
-        &self.name
+        self.name.as_str()
     }
 }

@@ -1,6 +1,6 @@
 use crate::Result;
 use crate::key::key_map::KeyMap;
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use regex::Regex;
 use std::fs::File;
 use std::io::Read;
