@@ -50,7 +50,7 @@ pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<()> {
     for secret_key in input.secrets.unwrap_or_default() {
         match keymap.decrypt(&secret_key.secret) {
             Ok(uncrypted_vault) => {
-                match String::from_utf8(uncrypted_vault.get_content().clone()) {
+                match String::from_utf8(uncrypted_vault.get_content().to_vec()) {
                     Ok(uncrypted_vault_uft8) => {
                         secrets.insert(
                             secret_key.secret.to_string(),
@@ -62,7 +62,7 @@ pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<()> {
                     }
                     Err(error) => {
                         errors.push(format!(
-                            "could decode key {}. may it's not valid utf8?, error: {}",
+                            "could decode key {}. maybe it's not valid utf8?, error: {}",
                             &secret_key.secret, error
                         ));
                     }
