@@ -133,7 +133,10 @@ fn run() -> Result<()> {
         FilesystemCheckResult::IsOk => {}
         FilesystemCheckResult::IsNotInstalled => enter_filesystem_wizard()?,
         FilesystemCheckResult::HasErrors(ref errors) => {
-            bail!("issues with the filesystem, e.g. a basic directory could be missing\n{}", errors.join("\n"));
+            bail!(
+                "issues with the filesystem, e.g. a basic directory could be missing\n{}",
+                errors.join("\n")
+            );
         }
     };
 
