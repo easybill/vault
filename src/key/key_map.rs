@@ -19,7 +19,6 @@ use toml;
 pub struct KeyMap {
     pems: Vec<Pem>,
     entries: Vec<KeyMapEntry>,
-    debug_enable_fetch_raw_secrets_from_env: Option<String>,
 }
 
 #[derive(Debug)]
@@ -45,7 +44,6 @@ pub struct Subscription {
 
 pub struct KeyMapConfig {
     pub path_private_key: String,
-    pub debug_enable_fetch_raw_secrets_from_env: Option<String>,
 }
 
 impl Subscription {
@@ -324,9 +322,6 @@ impl KeyMap {
         Ok(KeyMap {
             pems: Self::build_private_pems(config)?,
             entries: buffer,
-            debug_enable_fetch_raw_secrets_from_env: config
-                .debug_enable_fetch_raw_secrets_from_env
-                .clone(),
         })
     }
 
@@ -349,40 +344,7 @@ impl KeyMap {
         String::from_utf8(decrypted.get_content().to_vec()).context("Invalid Utf8")
     }
 
-    pub fn decrypt_debug_enable_fetch_raw_secrets_from_env(
-        &self,
-        subscription_key: &str,
-    ) -> Result<UncryptedVaultFile> {
-        let decrypt_user = self
-            .debug_enable_fetch_raw_secrets_from_env
-            .as_ref()
-            .expect("decrypt user must be given");
-
-        let secret_path = format!(
-            "./.vault/secrets/{}/{}.crypt",
-            subscription_key, decrypt_user
-        );
-
-        let crypt_file = fs::metadata(&secret_path)
-            .map_err(|_| anyhow!("could not find key - crypt file {secret_path} does not exist"))?;
-
-        if !crypt_file.is_file() {
-            bail!("could not find key - crypt file {secret_path} is not a file");
-        }
-
-        let env_var = format!("VAULT_DEBUG_SECRET_{}", subscription_key);
-        let secret = std::env::var(&env_var).map_err(|error| {
-            anyhow!("could not find key - could not read env var {env_var}, error: {error}")
-        })?;
-
-        Ok(UncryptedVaultFile::new(secret.into_bytes()))
-    }
-
     pub fn decrypt(&self, subscription_key: &str) -> Result<UncryptedVaultFile> {
-        if self.debug_enable_fetch_raw_secrets_from_env.is_some() {
-            return self.decrypt_debug_enable_fetch_raw_secrets_from_env(subscription_key);
-        }
-
         let possible_files: Vec<String> = {
             let mut buffer = vec![];
 
