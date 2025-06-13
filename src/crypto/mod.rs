@@ -123,7 +123,7 @@ impl Crypto {
         Ok(encrypted_data)
     }
 
-    pub fn key_decrypt(private_key: &PrivateKey, encrypted_key: &[u8]) -> Result<[u8; KEY_SIZE]> {
+    pub fn key_decrypt(private_key: &PrivateKey, encrypted_key: &[u8]) -> Result<Vec<u8>> {
         let rsa = Rsa::private_key_from_pem(private_key.get_data())
             .with_context(|| format!("invalid private key {}", &private_key.get_name()))?;
 
@@ -136,13 +136,13 @@ impl Crypto {
             .private_decrypt(encrypted_key, decrypted_data.as_mut_slice(), Padding::PKCS1)
             .context("could not decrypt")?;
 
-        assert!(size >= KEY_SIZE);
+        // Older versions of vault seem to have created files, which produced keys that are bigger
+        // than the expected KEY_SIZE. For compatibility reasons, we have to allow keys that
+        // are bigger than KEY_SIZE. The OpenSSL documentation says that keys are of fixed size,
+        // but it seems we rely on an undocumented/undefined behavior.
+        let decrypted_key = decrypted_data[..size].to_vec();
 
-        let mut key = [0; KEY_SIZE];
-
-        key.copy_from_slice(&decrypted_data[..KEY_SIZE]);
-
-        Ok(key)
+        Ok(decrypted_key)
     }
 }
 
