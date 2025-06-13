@@ -31,7 +31,7 @@ type Result<T> = anyhow::Result<T>;
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("Vault error: {error}");
+        eprintln!("Vault error: {error:?}");
         std::process::exit(1);
     }
 }
