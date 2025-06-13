@@ -12,17 +12,17 @@ const IV_SIZE: usize = 128 / 8;
 
 #[derive(Clone)]
 pub struct CryptedFileContent {
-    crypted_password: Vec<u8>,
-    content: Vec<u8>,
+    encrypted_key: Vec<u8>,
+    encrypted_content: Vec<u8>,
 }
 
 impl CryptedFileContent {
-    pub fn get_crypted_password(&self) -> &[u8] {
-        self.crypted_password.as_slice()
+    pub fn get_encrypted_key(&self) -> &[u8] {
+        self.encrypted_key.as_slice()
     }
 
-    pub fn get_content(&self) -> &[u8] {
-        self.content.as_slice()
+    pub fn get_encrypted_content(&self) -> &[u8] {
+        self.encrypted_content.as_slice()
     }
 }
 
@@ -48,22 +48,22 @@ impl Crypto {
         public_key: &PublicKey,
         uncrypted_vault_file: &UncryptedVaultFile,
     ) -> Result<CryptedFileContent> {
-        // at first, we need a password, we store the password in the "key"
-        let mut password = [0; KEY_SIZE];
-        rand_priv_bytes(&mut password)
+        // at first, we need an AES key, we store the AES key using RSA
+        let mut aes_key = [0; KEY_SIZE];
+        rand_priv_bytes(&mut aes_key)
             .context("could not create random bytes to encrypt vault_file.")?;
 
         let mut iv = vec![0; IV_SIZE];
         rand_bytes(&mut iv).context("could not create random bytes for iv.")?;
 
-        let key = Crypto::key_encrypt(public_key, &password)
-            .context("could not encrypt using public_key")?;
+        let key = Crypto::key_encrypt(public_key, &aes_key)
+            .context("could not encrypt the AES key using the public RSA key")?;
 
         let cipher = Cipher::aes_256_cbc();
 
         let mut content = encrypt(
             cipher,
-            &password,
+            &aes_key,
             Some(&iv),
             uncrypted_vault_file.get_content(),
         )
@@ -74,29 +74,29 @@ impl Crypto {
         content_with_iv.append(&mut content);
 
         Ok(CryptedFileContent {
-            crypted_password: key,
-            content: content_with_iv,
+            encrypted_key: key,
+            encrypted_content: content_with_iv,
         })
     }
 
     pub fn decrypt(pem: &Pem, crypted_vault_file: &VaultFile) -> Result<UncryptedVaultFile> {
-        // at first, we need to extract the password using the private key.
-        let password = Self::key_decrypt(
+        // at first, we need to extract the AES key using the private RSA key.
+        let aes_key = Self::key_decrypt(
             pem.get_private_key(),
             crypted_vault_file.get_keyfile_content(),
         )
-        .context("could not decrypt password using private key")?;
+        .context("could not decrypt AES key using the private RSA key")?;
 
         let cipher = Cipher::aes_256_cbc();
 
         ensure!(
             crypted_vault_file.get_secret_content().len() >= IV_SIZE,
-            "crypted size is to small, couldnt read enought for IV"
+            "crypted size is to small, couldnt read enough for IV"
         );
 
         let (iv, content) = crypted_vault_file.get_secret_content().split_at(IV_SIZE);
 
-        let content = decrypt(cipher, password.as_slice(), Some(iv), content)
+        let content = decrypt(cipher, aes_key.as_slice(), Some(iv), content)
             .context("could not encrypt using content")?;
 
         Ok(UncryptedVaultFile { content })
