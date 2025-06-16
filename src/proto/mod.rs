@@ -28,8 +28,8 @@ impl<'a> VaultFile<'a> {
 
     pub fn from_crypted_file_content(file_content: &'a CryptedFileContent) -> Self {
         VaultFile {
-            keyfile_content: Cow::Borrowed(file_content.get_crypted_password()),
-            secret_content: Cow::Borrowed(file_content.get_content()),
+            keyfile_content: Cow::Borrowed(file_content.get_encrypted_key()),
+            secret_content: Cow::Borrowed(file_content.get_encrypted_content()),
         }
     }
 
