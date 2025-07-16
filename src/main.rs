@@ -213,7 +213,7 @@ fn run() -> Result<()> {
     }
 
     println!();
-    println!("create keymap.");
+    println!("create key map.");
     println!();
 
     if scan_for_new_secrets(&keymap)? > 0 {
@@ -278,7 +278,7 @@ pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize> {
     let secret_path = "./.vault/secrets/";
 
     let paths = fs::read_dir(secret_path).with_context(|| {
-        format!("could not read subscription path. directory is missing? {secret_path}")
+        format!("could not read subscription path. could the directory be missing? {secret_path}")
     })?;
 
     for raw_path in paths {
@@ -295,13 +295,13 @@ pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize> {
         let path_as_string = path.path().display().to_string();
 
         if !Question::confirm(&format!(
-            "do you want to add the new secret {}",
+            "do you want to add the new secret at {}?",
             path_as_string
         )) {
             continue;
         }
 
-        keymap.add_new_secet(&path_as_string)?;
+        keymap.add_new_secret(&path_as_string)?;
 
         new_secrets_created += 1;
     }
@@ -328,7 +328,7 @@ pub fn create_keys(username: &str) -> Result<Pem> {
     .iter()
     {
         if fs::metadata(path).is_ok() {
-            bail!("the file {path} already exists. could not create the key.");
+            bail!("could not create the key, the file {path} already exists");
         }
     }
 

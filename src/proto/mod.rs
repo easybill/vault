@@ -43,13 +43,13 @@ impl<'a> VaultFile<'a> {
         let magic_byte = BigEndian::read_u16(&header_buffer[0..2]);
 
         if magic_byte != VAULT_MAGIC_BYTE {
-            bail!("invalid file, magic byte is wrong.");
+            bail!("invalid file, magic byte is wrong");
         }
 
         let version = BigEndian::read_u16(&header_buffer[2..4]);
 
         if version != 1 {
-            bail!("version is not supported.");
+            bail!("only version is supported, found {version}");
         }
 
         let keyfile_size = BigEndian::read_u64(&header_buffer[4..12]) as usize;
@@ -57,18 +57,18 @@ impl<'a> VaultFile<'a> {
 
         if keyfile_size > 50_000 || secret_bytes_size > 1_000_000_000 {
             // ensure nobody kills us with a wrong vault file :)
-            bail!("keysize is not supported.");
+            bail!("key size is not supported");
         }
 
         let mut keyfile_content = vec![0; keyfile_size];
         content
             .read_exact(&mut keyfile_content)
-            .context("read keyfile content")?;
+            .context("could not read key file contents")?;
 
         let mut secret_content = vec![0; secret_bytes_size];
         content
             .read_exact(&mut secret_content)
-            .context("read secret content")?;
+            .context("could not read secret contents")?;
 
         Ok(VaultFile {
             keyfile_content: Cow::Owned(keyfile_content),

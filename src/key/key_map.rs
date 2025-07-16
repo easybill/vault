@@ -172,7 +172,7 @@ impl KeyMap {
             );
         }
 
-        // todo, später muss ich die subscriptions nicht nur aus der config lesen, sondern zusätzlich im dateisystem nachsehen.
+        // todo, later I have to read the subscriptions not only from the config, but also look them up in the file system.
 
         Ok(buffer)
     }
@@ -240,16 +240,16 @@ impl KeyMap {
 
                 if !file_exists {
                     bail!(
-                        "private key given at: {path_as_string} but public key is not found at: {public_key_path}",
+                        "could not find a corresponding public key at {public_key_path:?} for private key at {path_as_string:?}",
                     );
                 }
 
                 buffer.push(Pem::new(
                     PrivateKey::load_from_file(&path_as_string).with_context(|| {
-                        format!("failed, to add key, private key: {path_as_string}")
+                        format!("could not add private key: {path_as_string}")
                     })?,
                     PublicKey::load_from_file(&public_key_path).with_context(|| {
-                        format!("failed, to add key, private key: {path_as_string}")
+                        format!("could not add public key: {path_as_string}")
                     })?,
                 ));
             }
@@ -437,7 +437,7 @@ impl KeyMap {
                 public_key.get_name()
             );
 
-            println!("create file {}", &new_filename);
+            println!("creating file {}", &new_filename);
 
             // neue vaultfile erstellen ....
 
@@ -483,7 +483,7 @@ impl KeyMap {
         let pem = self
             .get_private_pems()
             .first()
-            .with_context(|| format!("you've no private key, no idea how to crypt {filepath}"))?;
+            .with_context(|| format!("could not fine private key for you, no idea how to encrypt {filepath}"))?;
 
         let file_content = {
             let mut f =
@@ -500,8 +500,7 @@ impl KeyMap {
         let crypted_file_content = Crypto::encrypt(pem.get_public_key(), &uncrypted_file)
             .with_context(|| {
                 format!(
-                    "encryption of {} failed with key {}",
-                    &filepath,
+                    "could not encrypt {filepath} with key {}",
                     pem.get_name()
                 )
             })?;
@@ -516,7 +515,7 @@ impl KeyMap {
         let vault_file = VaultFile::from_crypted_file_content(&crypted_file_content);
 
         let mut f = File::create(&new_filename)
-            .with_context(|| format!("could not create new crypted file {new_filename}"))?;
+            .with_context(|| format!("could not create new encrypted file {new_filename}"))?;
 
         vault_file
             .write(&mut f)

@@ -49,7 +49,7 @@ impl Filesystem {
         for expected_directory in Self::get_basic_directories().iter() {
             if !Self::directory_exists(expected_directory) {
                 return FilesystemCheckResult::new_error(vec![format!(
-                    "Directory {}/{} must exist, but is not present.",
+                    "directory {}/{} must exist, but is not present",
                     std::env::current_dir()
                         .map_or_else(|_| "".to_string(), |x| x.to_string_lossy().to_string()),
                     expected_directory
