@@ -133,7 +133,8 @@ impl KeyMap {
                 buffer.insert(raw_subscription.to_string());
             }
 
-            // we've a glob pattern...
+            // looks like we're dealing with a glob pattern ...
+
             let glob_matcher = Glob::new(raw_subscription)
                 .with_context(|| format!("error when compiling glob pattern {raw_subscription}"))?
                 .compile_matcher();
@@ -175,7 +176,8 @@ impl KeyMap {
             );
         }
 
-        // todo, later I have to read the subscriptions not only from the config, but also look them up in the file system.
+        // TODO: later we not only have to read the subscriptions from the config,
+        // but also have to look them up in the file system.
 
         Ok(buffer)
     }
@@ -216,6 +218,7 @@ impl KeyMap {
 
                 if !path_as_string.ends_with(".pem") && !path_as_string.ends_with(".pem.pgp") {
                     // by default the directory is empty. its annoying when you get this error every time.
+
                     if path_as_string.ends_with(".gitkeep") {
                         continue;
                     }
@@ -402,7 +405,9 @@ impl KeyMap {
     }
 
     pub fn could_fulfill_subscription(&self, subscription: &Subscription) -> bool {
-        // auf der einen seite müssen wir sicherstellen, dass wir es decrypten können, todo auf der anderen, dass wir den pub key des anderen haben, davon gehe ich erstmal stumpf aus
+        // TODO: on the one hand we have to make sure that we can decrypt it,
+        // on the other hand that we have the other person's pub key,
+        // for now we're bluntly assuming that we do.
         self.decrypt_subscription(subscription).is_ok()
     }
 
