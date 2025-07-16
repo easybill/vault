@@ -114,7 +114,7 @@ impl Crypto {
 
         let size = rsa
             .public_encrypt(key, encrypted_data.as_mut_slice(), Padding::PKCS1)
-            .context("could not encrypt")?;
+            .context("could not encrypt secret")?;
 
         // The size of the created signature is pre-determined. Data that is written into it
         // will always be padded to the full signature size.
@@ -134,7 +134,7 @@ impl Crypto {
 
         let size = rsa
             .private_decrypt(encrypted_key, decrypted_data.as_mut_slice(), Padding::PKCS1)
-            .context("could not decrypt")?;
+            .context("could not decrypt secret")?;
 
         // Older versions of vault seem to have created files, which produced keys that are bigger
         // than the expected KEY_SIZE. For compatibility reasons, we have to allow keys that

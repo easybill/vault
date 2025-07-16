@@ -50,14 +50,14 @@ impl Key {
     pub fn load_from_file(path: &str) -> Result<Vec<u8>, Error> {
         if path.ends_with(".pgp") {
             return Self::load_from_file_pgp(path)
-                .with_context(|| format!("try to decode key {path}"));
+                .with_context(|| format!("could not decode key at {path}"));
         }
 
-        let mut f = File::open(path).with_context(|| format!("open file {path}"))?;
+        let mut f = File::open(path).with_context(|| format!("could not open file at {path}"))?;
         let mut content: Vec<u8> = vec![];
 
         f.read_to_end(&mut content)
-            .with_context(|| format!("could not read file {path}"))?;
+            .with_context(|| format!("could not read file at {path}"))?;
 
         Ok(content)
     }
@@ -86,7 +86,7 @@ impl Key {
         let status = child.wait()?;
 
         if !status.success() {
-            bail!("could not run gpg --decrypt {path}, {output_stdout}, {output_stderr}");
+            bail!("could not run `gpg --decrypt {path}`, {output_stdout}, {output_stderr}");
         }
 
         Ok(output_stdout.into_bytes())

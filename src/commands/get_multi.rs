@@ -41,7 +41,7 @@ struct OutputJsonItemTemplate {
 }
 
 pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<()> {
-    let input: InputJson = serde_json::from_str(input).context("Fehler beim Deserialisieren")?;
+    let input: InputJson = serde_json::from_str(input).context("could not deserialize input")?;
 
     let mut secrets = HashMap::new();
     let mut errors = vec![];

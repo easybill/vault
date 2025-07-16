@@ -18,7 +18,7 @@ pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<()> {
     let pem = pems.first().unwrap(); // todo, based on filename
 
     if !Question::confirm(&format!(
-        "do you want to rotate your private key {} ?",
+        "do you want to rotate your private key {:?}?",
         pem.get_name()
     )) {
         return Ok(());
@@ -38,7 +38,7 @@ pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<()> {
     delete_user(username_current).context("delete_user")?;
     println!("3. rename user");
     rename_user(username_rotated, username_current).context("rename_user")?;
-    println!("the key has been rotated, the old key is still there and has a backup suffix. ");
+    println!("the key has been rotated, the old key is still there and has a backup suffix.");
 
     Ok(())
 }
