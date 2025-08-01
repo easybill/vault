@@ -1,11 +1,11 @@
-use crate::Result;
-use crate::create_keys;
+use std::fs::{self, remove_dir, remove_file};
+use std::time::SystemTime;
+
+use anyhow::{Context, anyhow, bail};
+
 use crate::key::key_map::{KeyMap, KeyMapConfig, Subscription};
 use crate::ui::question::Question;
-use anyhow::{Context, anyhow, bail};
-use std::fs;
-use std::fs::{remove_dir, remove_file};
-use std::time::SystemTime;
+use crate::{Result, create_keys};
 
 pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
     let key_map = KeyMap::from_path(key_map_config)?;

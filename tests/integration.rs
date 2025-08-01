@@ -1,9 +1,10 @@
-use serial_test::serial;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
+
+use serial_test::serial;
 
 static TEST_DIR: &str = "vault_integration_test";
 

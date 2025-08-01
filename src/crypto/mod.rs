@@ -1,11 +1,11 @@
-use crate::Result;
-use crate::key::PublicKey;
-use crate::key::{Pem, PrivateKey};
-use crate::proto::VaultFile;
 use anyhow::{Context, ensure};
 use openssl::rand::{rand_bytes, rand_priv_bytes};
 use openssl::rsa::{Padding, Rsa};
 use openssl::symm::{Cipher, decrypt, encrypt};
+
+use crate::Result;
+use crate::key::{Pem, PrivateKey, PublicKey};
+use crate::proto::VaultFile;
 
 const KEY_SIZE: usize = 256 / 8;
 const IV_SIZE: usize = 128 / 8;
@@ -133,7 +133,11 @@ impl Crypto {
         let mut unencrypted_data = vec![0; rsa.size() as usize];
 
         let size = rsa
-            .private_decrypt(encrypted_key, unencrypted_data.as_mut_slice(), Padding::PKCS1)
+            .private_decrypt(
+                encrypted_key,
+                unencrypted_data.as_mut_slice(),
+                Padding::PKCS1,
+            )
             .context("could not decrypt secret")?;
 
         // Older versions of vault seem to have created files, which produced keys that are bigger

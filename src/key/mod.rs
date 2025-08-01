@@ -1,7 +1,8 @@
-use anyhow::{Context, Error, bail};
 use std::fs::File;
 use std::io::Read;
 use std::process::Command;
+
+use anyhow::{Context, Error, bail};
 
 pub mod key_map;
 

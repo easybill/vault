@@ -1,19 +1,17 @@
-use crate::Result;
-use crate::crypto::Crypto;
-use crate::crypto::UnencryptedVaultFile;
-use crate::key::Pem;
-use crate::key::PrivateKey;
-use crate::key::PublicKey;
-use crate::proto::VaultFile;
+use std::collections::{HashMap, HashSet};
+use std::fs::{self, File};
+use std::io::Read;
+use std::path::Path;
+
 use anyhow::{Context, anyhow, bail};
 use globset::Glob;
 use serde_derive::Deserialize;
-use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
 use toml;
+
+use crate::Result;
+use crate::crypto::{Crypto, UnencryptedVaultFile};
+use crate::key::{Pem, PrivateKey, PublicKey};
+use crate::proto::VaultFile;
 
 #[derive(Debug)]
 pub struct KeyMap {

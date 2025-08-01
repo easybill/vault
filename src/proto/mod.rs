@@ -1,11 +1,11 @@
+use std::borrow::Cow;
+use std::io::{Read, Write};
+
+use anyhow::{Context, bail};
+use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+
 use crate::Result;
 use crate::crypto::EncryptedFileContent;
-use anyhow::{Context, bail};
-use byteorder::ByteOrder;
-use byteorder::{BigEndian, WriteBytesExt};
-use std::borrow::Cow;
-use std::io::Read;
-use std::io::Write;
 
 #[derive(Debug)]
 pub struct VaultFile<'a> {

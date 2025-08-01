@@ -1,21 +1,18 @@
-use anyhow::{Context, bail};
-
-use clap::Arg;
-
-use crate::filesystem::Filesystem;
-use crate::filesystem::FilesystemCheckResult;
-use crate::key::key_map::KeyMap;
-use crate::key::key_map::KeyMapConfig;
-use openssl::rsa::Rsa;
 use std::fs;
 
+use anyhow::{Context, bail};
+use clap::Arg;
+use openssl::rsa::Rsa;
+use self_update::cargo_crate_version;
+use semver::{Version, VersionReq};
+
 use crate::commands::get_multi::get_multi;
+use crate::filesystem::{Filesystem, FilesystemCheckResult};
+use crate::key::key_map::{KeyMap, KeyMapConfig};
 use crate::key::{Pem, PrivateKey, PublicKey};
 use crate::rotate_key::rotate_keys;
 use crate::template::Template;
 use crate::ui::question::Question;
-use self_update::cargo_crate_version;
-use semver::{Version, VersionReq};
 
 mod commands;
 mod crypto;
@@ -24,7 +21,6 @@ mod key;
 mod proto;
 mod rotate_key;
 mod template;
-
 mod ui;
 
 type Result<T> = anyhow::Result<T>;

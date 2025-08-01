@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+use std::io::Write;
+
+use anyhow::Context;
+use serde_derive::{Deserialize, Serialize};
+
 use crate::Result;
 use crate::key::key_map::KeyMap;
 use crate::template::Template;
-use anyhow::Context;
-use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::io::Write;
 
 #[derive(Deserialize, Serialize)]
 struct InputJson {
