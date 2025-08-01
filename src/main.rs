@@ -1,6 +1,6 @@
 use std::fs;
 
-use anyhow::{Context, bail};
+use anyhow::{Context, Result, bail};
 use clap::Arg;
 use openssl::rsa::Rsa;
 use self_update::cargo_crate_version;
@@ -22,8 +22,6 @@ mod proto;
 mod rotate_key;
 mod template;
 mod ui;
-
-type Result<T> = anyhow::Result<T>;
 
 fn main() {
     if let Err(error) = run() {
