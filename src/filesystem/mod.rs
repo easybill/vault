@@ -1,7 +1,8 @@
-use crate::Result;
-use crate::fs;
-use anyhow::anyhow;
 use std::path::Path;
+
+use anyhow::anyhow;
+
+use crate::{Result, fs};
 
 pub struct Filesystem;
 

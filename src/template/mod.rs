@@ -1,9 +1,11 @@
-use crate::Result;
-use crate::key::key_map::KeyMap;
-use anyhow::Context;
-use regex::Regex;
 use std::fs::File;
 use std::io::Read;
+
+use anyhow::Context;
+use regex::Regex;
+
+use crate::Result;
+use crate::key::key_map::KeyMap;
 
 pub struct Template<'a> {
     key_map: &'a KeyMap,

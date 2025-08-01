@@ -1,6 +1,4 @@
-use std::io::Write;
-use std::io::stdin;
-use std::io::stdout;
+use std::io::{Write, stdin, stdout};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static YES: AtomicBool = AtomicBool::new(false);
