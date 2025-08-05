@@ -32,15 +32,15 @@ impl Pem {
         }
     }
 
-    pub fn get_name(&self) -> &str {
-        self.private_key.get_name()
+    pub fn name(&self) -> &str {
+        self.private_key.name()
     }
 
-    pub fn get_private_key(&self) -> &PrivateKey {
+    pub fn private_key(&self) -> &PrivateKey {
         &self.private_key
     }
 
-    pub fn get_public_key(&self) -> &PublicKey {
+    pub fn public_key(&self) -> &PublicKey {
         &self.public_key
     }
 }
@@ -118,11 +118,11 @@ impl PublicKey {
         })
     }
 
-    pub fn get_data(&self) -> &[u8] {
+    pub fn data(&self) -> &[u8] {
         self.data.as_slice()
     }
 
-    pub fn get_name(&self) -> &str {
+    pub fn name(&self) -> &str {
         self.name.as_str()
     }
 }
@@ -158,11 +158,11 @@ impl PrivateKey {
         }
     }
 
-    pub fn get_data(&self) -> &[u8] {
+    pub fn data(&self) -> &[u8] {
         self.data.as_slice()
     }
 
-    pub fn get_name(&self) -> &str {
+    pub fn name(&self) -> &str {
         self.name.as_str()
     }
 }

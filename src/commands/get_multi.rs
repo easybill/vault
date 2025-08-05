@@ -52,7 +52,7 @@ pub fn get_multi(input: &str, key_map: &KeyMap) -> Result<()> {
     for secret_key in input.secrets.unwrap_or_default() {
         match key_map.decrypt(&secret_key.secret) {
             Ok(unencrypted_vault) => {
-                match String::from_utf8(unencrypted_vault.get_content().to_vec()) {
+                match String::from_utf8(unencrypted_vault.content().to_vec()) {
                     Ok(unencrypted_vault_uft8) => {
                         secrets.insert(
                             secret_key.secret.to_string(),

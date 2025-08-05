@@ -18,18 +18,18 @@ const VAULT_MAGIC_BYTE: u16 = 4242;
 const VAULT_HEADER_SIZE: usize = 2 + 2 + 8 + 8;
 
 impl<'a> VaultFile<'a> {
-    pub fn get_keyfile_content(&self) -> &[u8] {
+    pub fn keyfile_content(&self) -> &[u8] {
         self.keyfile_content.as_ref()
     }
 
-    pub fn get_secret_content(&self) -> &[u8] {
+    pub fn secret_content(&self) -> &[u8] {
         self.secret_content.as_ref()
     }
 
     pub fn from_encrypted_file_content(file_content: &'a EncryptedFileContent) -> Self {
         VaultFile {
-            keyfile_content: Cow::Borrowed(file_content.get_encrypted_key()),
-            secret_content: Cow::Borrowed(file_content.get_encrypted_content()),
+            keyfile_content: Cow::Borrowed(file_content.encrypted_key()),
+            secret_content: Cow::Borrowed(file_content.encrypted_content()),
         }
     }
 

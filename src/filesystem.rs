@@ -34,7 +34,7 @@ impl Filesystem {
         }
     }
 
-    fn get_basic_directories() -> Vec<String> {
+    fn basic_directories() -> Vec<String> {
         vec![
             ".vault/keys".to_string(),
             ".vault/private_keys".to_string(),
@@ -62,7 +62,7 @@ impl Filesystem {
     }
 
     pub fn create_basic_directory_structure() -> Result<()> {
-        for dir in Self::get_basic_directories().iter() {
+        for dir in Self::basic_directories().iter() {
             fs::create_dir_all(dir)
                 .map_err(|error| anyhow!("could not create directory {dir}, {error}"))?
         }
