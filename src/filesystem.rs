@@ -47,13 +47,12 @@ impl Filesystem {
             return FilesystemCheckResult::new_is_not_installed();
         }
 
-        for expected_directory in Self::get_basic_directories().iter() {
-            if !Self::directory_exists(expected_directory) {
+        for directory in Self::basic_directories().iter() {
+            if !Self::directory_exists(directory) {
+                let cwd = std::env::current_dir()
+                    .map_or_else(|_| "".to_string(), |x| x.to_string_lossy().to_string());
                 return FilesystemCheckResult::new_error(vec![format!(
-                    "directory {}/{} must exist, but is not present",
-                    std::env::current_dir()
-                        .map_or_else(|_| "".to_string(), |x| x.to_string_lossy().to_string()),
-                    expected_directory
+                    "directory {cwd}/{directory} must exist, but is not present",
                 )]);
             }
         }

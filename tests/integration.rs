@@ -49,7 +49,7 @@ fn test_prepare() {
     cmd(".", "rm", &["-rf", TEST_DIR], false);
     cmd(".", "mkdir", &["-p", TEST_DIR], false);
 
-    let vault_dir = &format!("{}/vault", TEST_DIR);
+    let vault_dir = &format!("{TEST_DIR}/vault");
     cmd(".", "cp", &["./target/debug/vault", vault_dir], false);
     cmd(".", "cp", &["-r", "./fixtures", TEST_DIR], false);
     cmd(TEST_DIR, "mv", &["./fixtures", ".vault"], false);
@@ -68,25 +68,25 @@ fn test_integration_decode_old_version() {
     let valid_secrets = vec!["VERSION_1_0_0_SECRET"];
 
     for valid_secret in &valid_secrets {
-        println!("checking {}", valid_secret);
+        println!("checking {valid_secret}");
         let content = cmd(TEST_DIR, "./vault", &["get", valid_secret], true);
-        assert_eq!(format!("{}_CONTENT", valid_secret).into_bytes(), content);
+        assert_eq!(format!("{valid_secret}_CONTENT").into_bytes(), content);
     }
 
     // Generate a template with all keys ...
     let template = valid_secrets
         .iter()
-        .map(|x| format!("some othe{{{{r cont}}}}ent {{vault{{{}}}vault}}", x))
+        .map(|x| format!("some othe{{{{r cont}}}}ent {{vault{{{x}}}vault}}"))
         .collect::<Vec<_>>()
         .join(",");
 
     let expected_template = valid_secrets
         .iter()
-        .map(|x| format!("some othe{{{{r cont}}}}ent {}_CONTENT", x))
+        .map(|x| format!("some othe{{{{r cont}}}}ent {x}_CONTENT"))
         .collect::<Vec<_>>()
         .join(",");
 
-    let mut file = File::create(format!("{}/example_template.vault", TEST_DIR))
+    let mut file = File::create(format!("{TEST_DIR}/example_template.vault"))
         .expect("could not create template");
     file.write_all(template.as_bytes())
         .expect("could not write template");
@@ -174,7 +174,7 @@ fn test_integration_rotate_key_and_read_old_file() {
         &[
             "-r",
             "./fixtures/secrets",
-            &format!("{}/.vault/secrets", TEST_DIR),
+            &format!("{TEST_DIR}/.vault/secrets"),
         ],
         false,
     );
