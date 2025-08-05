@@ -169,7 +169,7 @@ fn run() -> Result<()> {
 
         let template = Template::new(&key_map);
         let value = template.parse_from_file(filename)?;
-        print!("{}", value);
+        print!("{value}");
 
         return Ok(());
     }
@@ -289,8 +289,7 @@ pub fn scan_for_new_secrets(key_map: &KeyMap) -> Result<usize> {
         let path_as_string = path.path().display().to_string();
 
         if !Question::confirm(&format!(
-            "do you want to add the new secret at {}?",
-            path_as_string
+            "do you want to add the new secret at {path_as_string}?"
         )) {
             continue;
         }
@@ -307,10 +306,10 @@ pub fn create_keys(username: &str) -> Result<Pem> {
     use std::fs::File;
     use std::io::Write;
 
-    let private_key_path = format!("./.vault/private_keys/{}.pem", username);
-    let public_key_path = format!("./.vault/private_keys/{}.pub.pem", username);
-    let private_key_public_path = format!("./.vault/keys/{}/{}.pub.pem", username, username);
-    let toml_config_path = format!("./.vault/keys/{}/config.toml", username);
+    let private_key_path = format!("./.vault/private_keys/{username}.pem");
+    let public_key_path = format!("./.vault/private_keys/{username}.pub.pem");
+    let private_key_public_path = format!("./.vault/keys/{username}/{username}.pub.pem");
+    let toml_config_path = format!("./.vault/keys/{username}/config.toml");
 
     println!("generating keys ...");
 
@@ -327,7 +326,7 @@ pub fn create_keys(username: &str) -> Result<Pem> {
     }
 
     // create directory
-    let public_directory = format!("./.vault/keys/{}", username);
+    let public_directory = format!("./.vault/keys/{username}");
 
     fs::create_dir(&public_directory)
         .with_context(|| format!("could not create directory {public_directory}"))?;

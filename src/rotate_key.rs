@@ -25,10 +25,10 @@ pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
     }
 
     let username_current = pem.name();
-    let username_rotated = &format!("{}_to_rotate", username_current);
+    let username_rotated = &format!("{username_current}_to_rotate");
 
     println!("1. generate new key");
-    create_keys(&format!("{}_to_rotate", username_current)).context("create_keys")?;
+    create_keys(&format!("{username_current}_to_rotate")).context("create_keys")?;
 
     let keymap = KeyMap::from_path(key_map_config)?;
 
@@ -52,30 +52,29 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
     let mut renames = vec![];
 
     renames.push(Rename {
-        from: format!("./.vault/private_keys/{}.pem", username_from),
-        to: format!("./.vault/private_keys/{}.pem", username_to),
+        from: format!("./.vault/private_keys/{username_from}.pem"),
+        to: format!("./.vault/private_keys/{username_to}.pem"),
     });
 
     renames.push(Rename {
-        from: format!("./.vault/private_keys/{}.pub.pem", username_from),
-        to: format!("./.vault/private_keys/{}.pub.pem", username_to),
+        from: format!("./.vault/private_keys/{username_from}.pub.pem"),
+        to: format!("./.vault/private_keys/{username_to}.pub.pem"),
     });
 
     renames.push(Rename {
-        from: format!("./.vault/keys/{}", username_from),
-        to: format!("./.vault/keys/{}", username_to),
+        from: format!("./.vault/keys/{username_from}"),
+        to: format!("./.vault/keys/{username_to}"),
     });
 
     renames.push(Rename {
-        from: format!("./.vault/keys/{}/{}.pub.pem", username_to, username_from),
-        to: format!("./.vault/keys/{}/{}.pub.pem", username_to, username_to),
+        from: format!("./.vault/keys/{username_to}/{username_from}.pub.pem"),
+        to: format!("./.vault/keys/{username_to}/{username_to}.pub.pem"),
     });
 
     let secret_directory_path = "./.vault/secrets/";
 
     let secret_directory_path_readdir = fs::read_dir(secret_directory_path).context(format!(
-        "could not read subscription path. directory is missing? {}",
-        &secret_directory_path
+        "could not read subscription path. directory is missing? {secret_directory_path}"
     ))?;
 
     for path in secret_directory_path_readdir {
@@ -88,7 +87,7 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
         let path_file_name = path.file_name();
         let secret_name = path_file_name.to_string_lossy().to_string();
 
-        let crypt_file_path = format!("./.vault/secrets/{}/{}.crypt", secret_name, username_from);
+        let crypt_file_path = format!("./.vault/secrets/{secret_name}/{username_from}.crypt");
 
         if fs::metadata(&crypt_file_path).is_err() {
             continue;
@@ -96,7 +95,7 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
 
         renames.push(Rename {
             from: crypt_file_path,
-            to: format!("./.vault/secrets/{}/{}.crypt", secret_name, username_to),
+            to: format!("./.vault/secrets/{secret_name}/{username_to}.crypt"),
         });
     }
 
@@ -111,10 +110,9 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
 
         fs::rename(&rename.from, &rename.to).map_err(|error| {
             anyhow!(
-                "could not copy from {} to {}, error: {}",
-                &rename.from,
-                &rename.to,
-                error
+                "could not copy from {from} to {to}, error: {error}",
+                from = &rename.from,
+                to = &rename.to,
             )
         })?;
     }
@@ -141,7 +139,7 @@ fn delete_user(username: &str) -> Result<()> {
         let path_file_name = path.file_name();
         let secret_name = path_file_name.to_string_lossy().to_string();
 
-        let crypt_file_path = format!("./.vault/secrets/{}/{}.crypt", secret_name, username);
+        let crypt_file_path = format!("./.vault/secrets/{secret_name}/{username}.crypt");
 
         if fs::metadata(&crypt_file_path).is_err() {
             continue;
@@ -152,7 +150,7 @@ fn delete_user(username: &str) -> Result<()> {
     }
 
     // delete key folder
-    let keys_directory = format!("./.vault/keys/{}", username);
+    let keys_directory = format!("./.vault/keys/{username}");
 
     if let Ok(metadata) = fs::metadata(&keys_directory) {
         if !metadata.is_dir() {
@@ -189,18 +187,12 @@ fn delete_user(username: &str) -> Result<()> {
     };
 
     let _ = fs::rename(
-        format!("./.vault/private_keys/{}.pem", username),
-        format!(
-            "./.vault/private_keys/{}_backup_{}.pem",
-            username, timestamp
-        ),
+        format!("./.vault/private_keys/{username}.pem"),
+        format!("./.vault/private_keys/{username}_backup_{timestamp}.pem"),
     );
     let _ = fs::rename(
-        format!("./.vault/private_keys/{}.pub.pem", username),
-        format!(
-            "./.vault/private_keys/{}_backup_{}.pub.pem",
-            username, timestamp
-        ),
+        format!("./.vault/private_keys/{username}.pub.pem"),
+        format!("./.vault/private_keys/{username}_backup_{timestamp}.pub.pem"),
     );
 
     Ok(())
@@ -229,10 +221,8 @@ fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<(
         match keymap.fulfill_subscription(&subscription) {
             Ok(_k) => {}
             Err(_e) => {
-                let crypt_file_path = format!(
-                    "./.vault/secrets/{}/{}.crypt",
-                    secret_name, username_rotated
-                );
+                let crypt_file_path =
+                    format!("./.vault/secrets/{secret_name}/{username_rotated}.crypt");
                 if fs::metadata(&crypt_file_path).is_ok() {
                     bail!("could not read secret {}", crypt_file_path);
                 }

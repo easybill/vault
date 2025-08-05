@@ -11,7 +11,7 @@ impl Question {
     }
 
     pub fn ask(question: &str) -> String {
-        println!("{}", question);
+        println!("{question}");
 
         let _ = stdout().flush();
 
@@ -41,7 +41,7 @@ impl Question {
         }
 
         loop {
-            match Self::ask(&format!("{} (y/n)", question))
+            match Self::ask(&format!("{question} (y/n)"))
                 .trim()
                 .to_lowercase()
                 .as_ref()
