@@ -40,7 +40,7 @@ struct OutputJsonItemTemplate {
     pub value: String,
 }
 
-pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<()> {
+pub fn get_multi(input: &str, key_map: &KeyMap) -> Result<()> {
     let input: InputJson = serde_json::from_str(input).context("could not deserialize input")?;
 
     let mut secrets = HashMap::new();
@@ -48,15 +48,15 @@ pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<()> {
 
     // keys
     for secret_key in input.secrets.unwrap_or_default() {
-        match keymap.decrypt(&secret_key.secret) {
-            Ok(uncrypted_vault) => {
-                match String::from_utf8(uncrypted_vault.get_content().to_vec()) {
-                    Ok(uncrypted_vault_uft8) => {
+        match key_map.decrypt(&secret_key.secret) {
+            Ok(unencrypted_vault) => {
+                match String::from_utf8(unencrypted_vault.get_content().to_vec()) {
+                    Ok(unencrypted_vault_uft8) => {
                         secrets.insert(
                             secret_key.secret.to_string(),
                             OutputJsonItem {
                                 name: secret_key.secret.to_string(),
-                                value: uncrypted_vault_uft8,
+                                value: unencrypted_vault_uft8,
                             },
                         );
                     }
@@ -79,7 +79,7 @@ pub fn get_multi(input: &str, keymap: &KeyMap) -> Result<()> {
     let mut templates = HashMap::new();
 
     for template in input.templates.unwrap_or_default() {
-        match Template::new(keymap).parse_from_str(&template.template) {
+        match Template::new(key_map).parse_from_str(&template.template) {
             Ok(parsed_template) => {
                 templates.insert(
                     template.template.to_string(),

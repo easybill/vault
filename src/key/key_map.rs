@@ -1,6 +1,6 @@
 use crate::Result;
 use crate::crypto::Crypto;
-use crate::crypto::UncryptedVaultFile;
+use crate::crypto::UnencryptedVaultFile;
 use crate::key::Pem;
 use crate::key::PrivateKey;
 use crate::key::PublicKey;
@@ -37,7 +37,7 @@ pub struct ConfigToml {
 pub struct Subscription {
     username: String,
     name: String,
-    is_stisfied: bool,
+    is_satisfied: bool,
     // file for subscription exists, but no subscription is required
     // is_orphan: bool // TODO
 }
@@ -47,21 +47,24 @@ pub struct KeyMapConfig {
 }
 
 impl Subscription {
-    pub fn new(username: String, name: String, is_stisfied: bool) -> Self {
+    pub fn new(username: String, name: String, is_satisfied: bool) -> Self {
         Self {
             username,
             name,
-            is_stisfied,
+            is_satisfied,
         }
     }
+
     pub fn get_username(&self) -> &str {
         &self.username
     }
+
     pub fn get_name(&self) -> &str {
         &self.name
     }
-    pub fn is_stisfied(&self) -> bool {
-        self.is_stisfied
+
+    pub fn is_satisfied(&self) -> bool {
+        self.is_satisfied
     }
 }
 
@@ -87,7 +90,7 @@ impl KeyMap {
         Ok(buffer)
     }
 
-    pub fn get_subsciptions(config: &ConfigToml) -> Result<Vec<String>> {
+    pub fn get_subscriptions(config: &ConfigToml) -> Result<Vec<String>> {
         // read the content of ./.vault/secrets/ to find secrets that are matching a glob pattern.
         let available_secrets = {
             let mut buffer = vec![];
@@ -153,7 +156,7 @@ impl KeyMap {
         let mut buffer = HashMap::new();
 
         for raw_subscription in
-            Self::get_subsciptions(config).context("could not get subscriptions")?
+            Self::get_subscriptions(config).context("could not get subscriptions")?
         {
             let secret_path = format!("./.vault/secrets/{}/{}.crypt", &raw_subscription, username);
 
@@ -167,7 +170,7 @@ impl KeyMap {
                 Subscription {
                     username: username.to_string(),
                     name: raw_subscription.clone(),
-                    is_stisfied: file_exists,
+                    is_satisfied: file_exists,
                 },
             );
         }
@@ -212,7 +215,7 @@ impl KeyMap {
                 }
 
                 if !path_as_string.ends_with(".pem") && !path_as_string.ends_with(".pem.pgp") {
-                    // by default the directory is empty. its annoying when you get this error everytime.
+                    // by default the directory is empty. its annoying when you get this error every time.
                     if path_as_string.ends_with(".gitkeep") {
                         continue;
                     }
@@ -225,7 +228,7 @@ impl KeyMap {
                     continue;
                 }
 
-                // path is a private key, no lets try to find the pub key.
+                // path is a private key, now lets try to find the pub key:
 
                 let public_key_path = format!(
                     "{}.pub.pem",
@@ -245,12 +248,10 @@ impl KeyMap {
                 }
 
                 buffer.push(Pem::new(
-                    PrivateKey::load_from_file(&path_as_string).with_context(|| {
-                        format!("could not add private key: {path_as_string}")
-                    })?,
-                    PublicKey::load_from_file(&public_key_path).with_context(|| {
-                        format!("could not add public key: {path_as_string}")
-                    })?,
+                    PrivateKey::load_from_file(&path_as_string)
+                        .with_context(|| format!("could not add private key: {path_as_string}"))?,
+                    PublicKey::load_from_file(&public_key_path)
+                        .with_context(|| format!("could not add public key: {path_as_string}"))?,
                 ));
             }
         }
@@ -325,26 +326,29 @@ impl KeyMap {
         })
     }
 
-    pub fn decrypt_subscription(&self, subscription: &Subscription) -> Result<UncryptedVaultFile> {
+    pub fn decrypt_subscription(
+        &self,
+        subscription: &Subscription,
+    ) -> Result<UnencryptedVaultFile> {
         self.decrypt(subscription.get_name())
     }
 
     pub fn decrypt_subscription_string(
         &self,
         subscription: &Subscription,
-    ) -> Result<UncryptedVaultFile> {
+    ) -> Result<UnencryptedVaultFile> {
         self.decrypt(subscription.get_name())
     }
 
     pub fn decrypt_to_string(&self, subscription_key: &str) -> Result<String> {
-        let decrypted = self
+        let unencrypted = self
             .decrypt(subscription_key)
             .with_context(|| format!("could not decrypt {subscription_key}"))?;
 
-        String::from_utf8(decrypted.get_content().to_vec()).context("Invalid Utf8")
+        String::from_utf8(unencrypted.get_content().to_vec()).context("Invalid Utf8")
     }
 
-    pub fn decrypt(&self, subscription_key: &str) -> Result<UncryptedVaultFile> {
+    pub fn decrypt(&self, subscription_key: &str) -> Result<UnencryptedVaultFile> {
         let possible_files: Vec<String> = {
             let mut buffer = vec![];
 
@@ -386,7 +390,7 @@ impl KeyMap {
                 };
 
                 match Crypto::decrypt(pem, &vault_file) {
-                    Ok(uncrypted_vault_file) => return Ok(uncrypted_vault_file),
+                    Ok(unencrypted_vault_file) => return Ok(unencrypted_vault_file),
                     Err(_) => {
                         continue;
                     }
@@ -403,12 +407,10 @@ impl KeyMap {
     }
 
     pub fn fulfill_subscription(&self, subscription: &Subscription) -> Result<()> {
-        let uncrypted_vault_file = self.decrypt_subscription(subscription).with_context(|| {
-            format!(
-                "could not decrypt subscription {}.",
-                subscription.get_name()
-            )
-        })?;
+        let unencrypted_vault_file =
+            self.decrypt_subscription(subscription).with_context(|| {
+                format!("could not decrypt subscription {}", subscription.get_name())
+            })?;
 
         let public_keys_for_user: &Vec<PublicKey> = {
             let mut keys = None;
@@ -427,7 +429,7 @@ impl KeyMap {
         .ok_or_else(|| anyhow!("could not find keys for user"))?;
 
         if public_keys_for_user.is_empty() {
-            bail!("could not found key for user");
+            bail!("could not find key for user");
         }
 
         for public_key in public_keys_for_user.iter() {
@@ -439,17 +441,17 @@ impl KeyMap {
 
             println!("creating file {}", &new_filename);
 
-            // neue vaultfile erstellen ....
+            // create new vault file:
 
-            let crypted_file_content = Crypto::encrypt(public_key, &uncrypted_vault_file)
+            let encrypted_file_content = Crypto::encrypt(public_key, &unencrypted_vault_file)
                 .with_context(|| {
-                    format!("could not crypt data using key {}", public_key.get_name())
+                    format!("could not encrypt data using key {}", public_key.get_name())
                 })?;
 
-            let vault_file = VaultFile::from_crypted_file_content(&crypted_file_content);
+            let vault_file = VaultFile::from_encrypted_file_content(&encrypted_file_content);
 
             let mut f = File::create(&new_filename)
-                .with_context(|| format!("could not create new crypted file {new_filename}"))?;
+                .with_context(|| format!("could not create new encrypted file {new_filename}"))?;
 
             vault_file
                 .write(&mut f)
@@ -468,7 +470,7 @@ impl KeyMap {
 
         for key_map_entry in &self.entries {
             for subscription in key_map_entry.subscriptions.values() {
-                if subscription.is_stisfied {
+                if subscription.is_satisfied {
                     continue;
                 }
 
@@ -479,11 +481,10 @@ impl KeyMap {
         buffer
     }
 
-    pub fn add_new_secet(&self, filepath: &str) -> Result<()> {
-        let pem = self
-            .get_private_pems()
-            .first()
-            .with_context(|| format!("could not fine private key for you, no idea how to encrypt {filepath}"))?;
+    pub fn add_new_secret(&self, filepath: &str) -> Result<()> {
+        let pem = self.get_private_pems().first().with_context(|| {
+            format!("could not fine private key for you, no idea how to encrypt {filepath}")
+        })?;
 
         let file_content = {
             let mut f =
@@ -495,15 +496,10 @@ impl KeyMap {
             content
         };
 
-        let uncrypted_file = UncryptedVaultFile::new(file_content);
+        let unencrypted_file = UnencryptedVaultFile::new(file_content);
 
-        let crypted_file_content = Crypto::encrypt(pem.get_public_key(), &uncrypted_file)
-            .with_context(|| {
-                format!(
-                    "could not encrypt {filepath} with key {}",
-                    pem.get_name()
-                )
-            })?;
+        let encrypted_file_content = Crypto::encrypt(pem.get_public_key(), &unencrypted_file)
+            .with_context(|| format!("could not encrypt {filepath} with key {}", pem.get_name()))?;
 
         fs::remove_file(filepath).with_context(|| format!("could not remove file {filepath}"))?;
 
@@ -512,7 +508,7 @@ impl KeyMap {
 
         let new_filename = format!("{}/{}.crypt", filepath, pem.get_name());
 
-        let vault_file = VaultFile::from_crypted_file_content(&crypted_file_content);
+        let vault_file = VaultFile::from_encrypted_file_content(&encrypted_file_content);
 
         let mut f = File::create(&new_filename)
             .with_context(|| format!("could not create new encrypted file {new_filename}"))?;

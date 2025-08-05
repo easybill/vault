@@ -7,10 +7,10 @@ use std::fs;
 use std::fs::{remove_dir, remove_file};
 use std::time::SystemTime;
 
-pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<()> {
-    let keymap = KeyMap::from_path(keymap_config)?;
+pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
+    let key_map = KeyMap::from_path(key_map_config)?;
 
-    let pems = keymap
+    let pems = key_map
         .get_private_pems()
         .iter()
         .filter(|x| !x.get_name().contains("_backup_"))
@@ -30,7 +30,7 @@ pub fn rotate_keys(keymap_config: &KeyMapConfig) -> Result<()> {
     println!("1. generate new key");
     create_keys(&format!("{}_to_rotate", username_current)).context("create_keys")?;
 
-    let keymap = KeyMap::from_path(keymap_config)?;
+    let keymap = KeyMap::from_path(key_map_config)?;
 
     println!("2. allow access to all keys");
     allow_access_to_all_keys(&keymap, username_rotated).context("allow_access_to_all_keys")?;
@@ -103,9 +103,9 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
     for rename in renames {
         if fs::metadata(&rename.to).is_ok() {
             return Err(anyhow!(
-                "could not copy from {} to {}, file/dir already exsts",
-                &rename.from,
-                &rename.to
+                "could not copy from {from} to {to}, file/dir already exists",
+                from = &rename.from,
+                to = &rename.to
             ));
         }
 
