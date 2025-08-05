@@ -11,20 +11,20 @@ pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
     let key_map = KeyMap::from_path(key_map_config)?;
 
     let pems = key_map
-        .get_private_pems()
+        .private_pems()
         .iter()
-        .filter(|x| !x.get_name().contains("_backup_"))
+        .filter(|x| !x.name().contains("_backup_"))
         .collect::<Vec<_>>();
     let pem = pems.first().unwrap(); // todo, based on filename
 
     if !Question::confirm(&format!(
         "do you want to rotate your private key {:?}?",
-        pem.get_name()
+        pem.name()
     )) {
         return Ok(());
     }
 
-    let username_current = pem.get_name();
+    let username_current = pem.name();
     let username_rotated = &format!("{}_to_rotate", username_current);
 
     println!("1. generate new key");

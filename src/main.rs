@@ -135,7 +135,7 @@ fn run() -> Result<()> {
     })?;
 
     if let Some(_matches) = matches.subcommand_matches("check-keys") {
-        if key_map.get_private_pems().is_empty() {
+        if key_map.private_pems().is_empty() {
             bail!("there is no private key");
         }
 
@@ -149,7 +149,7 @@ fn run() -> Result<()> {
 
         let unencrypted = key_map.decrypt(key)?;
         use std::io::Write;
-        std::io::stdout().write_all(unencrypted.get_content())?;
+        std::io::stdout().write_all(unencrypted.content())?;
         return Ok(());
     }
 
@@ -217,16 +217,16 @@ fn run() -> Result<()> {
 
     // check loaded keys:
     println!("loaded keys:");
-    for pem in key_map.get_private_pems() {
-        println!("- {}", pem.get_name());
+    for pem in key_map.private_pems() {
+        println!("- {}", pem.name());
     }
 
     // check if there are any subscriptions that we can fulfill
-    for open_subscription in &key_map.get_open_subscriptions() {
+    for open_subscription in &key_map.open_subscriptions() {
         println!();
         println!("-- Open Subscription");
-        println!("--    user: {}", open_subscription.get_username());
-        println!("--    name: {}", open_subscription.get_name());
+        println!("--    user: {}", open_subscription.username());
+        println!("--    name: {}", open_subscription.name());
 
         if !key_map.could_fulfill_subscription(open_subscription) {
             println!(

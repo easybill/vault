@@ -17,11 +17,11 @@ pub struct EncryptedFileContent {
 }
 
 impl EncryptedFileContent {
-    pub fn get_encrypted_key(&self) -> &[u8] {
+    pub fn encrypted_key(&self) -> &[u8] {
         self.encrypted_key.as_slice()
     }
 
-    pub fn get_encrypted_content(&self) -> &[u8] {
+    pub fn encrypted_content(&self) -> &[u8] {
         self.encrypted_content.as_slice()
     }
 }
@@ -36,7 +36,7 @@ impl UnencryptedVaultFile {
         UnencryptedVaultFile { content }
     }
 
-    pub fn get_content(&self) -> &[u8] {
+    pub fn content(&self) -> &[u8] {
         self.content.as_slice()
     }
 }
@@ -65,7 +65,7 @@ impl Crypto {
             cipher,
             &aes_key,
             Some(&iv),
-            unencrypted_vault_file.get_content(),
+            unencrypted_vault_file.content(),
         )
         .context("could not encrypt using content")?;
 
@@ -81,20 +81,17 @@ impl Crypto {
 
     pub fn decrypt(pem: &Pem, encrypted_vault_file: &VaultFile) -> Result<UnencryptedVaultFile> {
         // at first, we need to extract the AES key using the private RSA key.
-        let aes_key = Self::key_decrypt(
-            pem.get_private_key(),
-            encrypted_vault_file.get_keyfile_content(),
-        )
-        .context("could not decrypt AES key using the private RSA key")?;
+        let aes_key = Self::key_decrypt(pem.private_key(), encrypted_vault_file.keyfile_content())
+            .context("could not decrypt AES key using the private RSA key")?;
 
         let cipher = Cipher::aes_256_cbc();
 
         ensure!(
-            encrypted_vault_file.get_secret_content().len() >= IV_SIZE,
+            encrypted_vault_file.secret_content().len() >= IV_SIZE,
             "encrypted size is to small, could not read enough for IV"
         );
 
-        let (iv, content) = encrypted_vault_file.get_secret_content().split_at(IV_SIZE);
+        let (iv, content) = encrypted_vault_file.secret_content().split_at(IV_SIZE);
 
         let content = decrypt(cipher, aes_key.as_slice(), Some(iv), content)
             .context("could not encrypt using content")?;
@@ -103,8 +100,8 @@ impl Crypto {
     }
 
     pub fn key_encrypt(public_key: &PublicKey, key: &[u8; KEY_SIZE]) -> Result<Vec<u8>> {
-        let rsa = openssl::rsa::Rsa::public_key_from_pem(public_key.get_data())
-            .with_context(|| format!("invalid public key {}", &public_key.get_name()))?;
+        let rsa = openssl::rsa::Rsa::public_key_from_pem(public_key.data())
+            .with_context(|| format!("invalid public key {}", &public_key.name()))?;
 
         // Since this is a low level function, we can only encrypt data that is less than the
         // size of a signature minus the identifier marker of the padding (11 for PKCS1).
@@ -124,8 +121,8 @@ impl Crypto {
     }
 
     pub fn key_decrypt(private_key: &PrivateKey, encrypted_key: &[u8]) -> Result<Vec<u8>> {
-        let rsa = Rsa::private_key_from_pem(private_key.get_data())
-            .with_context(|| format!("invalid private key {}", &private_key.get_name()))?;
+        let rsa = Rsa::private_key_from_pem(private_key.data())
+            .with_context(|| format!("invalid private key {}", &private_key.name()))?;
 
         // The maximal encrypted data can only be the size of the signature minus the identifier
         // marker of the padding (11 for PKCS1). The OpenSSL Rust crate currently doesn't properly
@@ -174,8 +171,8 @@ mod test {
     #[test]
     fn test_key_round_trip() {
         let pem = generate_pem();
-        let private_key = pem.get_private_key();
-        let public_key = pem.get_public_key();
+        let private_key = pem.private_key();
+        let public_key = pem.public_key();
 
         let mut aes_key = [0; KEY_SIZE];
         rand_priv_bytes(&mut aes_key).unwrap();
