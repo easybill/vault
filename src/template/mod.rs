@@ -6,12 +6,12 @@ use std::fs::File;
 use std::io::Read;
 
 pub struct Template<'a> {
-    keymap: &'a KeyMap,
+    key_map: &'a KeyMap,
 }
 
 impl<'a> Template<'a> {
-    pub fn new(keymap: &'a KeyMap) -> Self {
-        Template { keymap }
+    pub fn new(key_map: &'a KeyMap) -> Self {
+        Template { key_map }
     }
 
     pub fn parse_from_file(&self, filename: &str) -> Result<String> {
@@ -52,11 +52,11 @@ impl<'a> Template<'a> {
                     .trim()
                     .to_string();
 
-                let uncrypted_key = self.keymap.decrypt_to_string(&key).with_context(|| format!(
+                let unencrypted_key = self.key_map.decrypt_to_string(&key).with_context(|| format!(
                     "template requires the key \"{key}\", but it's not possible to decrypt the key"
                 ))?;
 
-                file_content = file_content.replace(from, &uncrypted_key);
+                file_content = file_content.replace(from, &unencrypted_key);
             }
         }
 

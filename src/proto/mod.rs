@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::crypto::CryptedFileContent;
+use crate::crypto::EncryptedFileContent;
 use anyhow::{Context, bail};
 use byteorder::ByteOrder;
 use byteorder::{BigEndian, WriteBytesExt};
@@ -26,7 +26,7 @@ impl<'a> VaultFile<'a> {
         self.secret_content.as_ref()
     }
 
-    pub fn from_crypted_file_content(file_content: &'a CryptedFileContent) -> Self {
+    pub fn from_encrypted_file_content(file_content: &'a EncryptedFileContent) -> Self {
         VaultFile {
             keyfile_content: Cow::Borrowed(file_content.get_encrypted_key()),
             secret_content: Cow::Borrowed(file_content.get_encrypted_content()),

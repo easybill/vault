@@ -136,12 +136,12 @@ fn run() -> Result<()> {
         .map(|(_, value)| value)
         .unwrap_or_else(|| "./.vault/private_keys".to_string());
 
-    let mut keymap = KeyMap::from_path(&KeyMapConfig {
+    let mut key_map = KeyMap::from_path(&KeyMapConfig {
         path_private_key: path_private_key.clone(),
     })?;
 
     if let Some(_matches) = matches.subcommand_matches("check-keys") {
-        if keymap.get_private_pems().is_empty() {
+        if key_map.get_private_pems().is_empty() {
             bail!("there is no private key");
         }
 
@@ -153,9 +153,9 @@ fn run() -> Result<()> {
     if let Some(matches) = matches.subcommand_matches("get") {
         let key = matches.get_one::<String>("key").expect("key must exists");
 
-        let decrypted = keymap.decrypt(key)?;
+        let unencrypted = key_map.decrypt(key)?;
         use std::io::Write;
-        std::io::stdout().write_all(decrypted.get_content())?;
+        std::io::stdout().write_all(unencrypted.get_content())?;
         return Ok(());
     }
 
@@ -164,7 +164,7 @@ fn run() -> Result<()> {
             matches
                 .get_one::<String>("json")
                 .expect("key json must exists"),
-            &keymap,
+            &key_map,
         );
     }
 
@@ -173,7 +173,7 @@ fn run() -> Result<()> {
             .get_one::<String>("filename")
             .expect("filename must exist");
 
-        let template = Template::new(&keymap);
+        let template = Template::new(&key_map);
         let value = template.parse_from_file(filename)?;
         print!("{}", value);
 
@@ -216,25 +216,25 @@ fn run() -> Result<()> {
     println!("create key map.");
     println!();
 
-    if scan_for_new_secrets(&keymap)? > 0 {
-        // refresh the keymap
-        keymap = KeyMap::from_path(&KeyMapConfig { path_private_key })?;
+    if scan_for_new_secrets(&key_map)? > 0 {
+        // refresh the key map
+        key_map = KeyMap::from_path(&KeyMapConfig { path_private_key })?;
     }
 
     // check loaded keys:
     println!("loaded keys:");
-    for pem in keymap.get_private_pems() {
+    for pem in key_map.get_private_pems() {
         println!("- {}", pem.get_name());
     }
 
     // check if there are any subscriptions that we can fulfill
-    for open_subscription in &keymap.get_open_subscriptions() {
+    for open_subscription in &key_map.get_open_subscriptions() {
         println!();
         println!("-- Open Subscription");
         println!("--    user: {}", open_subscription.get_username());
         println!("--    name: {}", open_subscription.get_name());
 
-        if !keymap.could_fulfill_subscription(open_subscription) {
+        if !key_map.could_fulfill_subscription(open_subscription) {
             println!(
                 "no key found to fulfill the subscription, ask someone who has access to this key"
             );
@@ -246,7 +246,7 @@ fn run() -> Result<()> {
         if Question::confirm(
             "   you've the required right to fulfill the subscription, give him access?",
         ) {
-            keymap.fulfill_subscription(open_subscription)?;
+            key_map.fulfill_subscription(open_subscription)?;
         } else {
             println!("maybe later");
         }
@@ -272,7 +272,7 @@ pub fn enter_filesystem_wizard() -> Result<()> {
     Ok(())
 }
 
-pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize> {
+pub fn scan_for_new_secrets(key_map: &KeyMap) -> Result<usize> {
     let mut new_secrets_created = 0;
 
     let secret_path = "./.vault/secrets/";
@@ -301,7 +301,7 @@ pub fn scan_for_new_secrets(keymap: &KeyMap) -> Result<usize> {
             continue;
         }
 
-        keymap.add_new_secret(&path_as_string)?;
+        key_map.add_new_secret(&path_as_string)?;
 
         new_secrets_created += 1;
     }
