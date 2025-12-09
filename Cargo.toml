@@ -20,7 +20,9 @@ self_update = "0.42"
 semver = "1"
 
 [dev-dependencies]
-serial_test = "3"
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
 
 [profile.release]
 lto = "fat"
