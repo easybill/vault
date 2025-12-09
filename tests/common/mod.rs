@@ -3,6 +3,8 @@
 //! Provides a `TestVault` builder that creates isolated test environments with
 //! dynamically generated RSA keys and encrypted secrets.
 
+#![allow(dead_code)] // Not all test files use all helpers
+
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
