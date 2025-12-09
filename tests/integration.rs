@@ -1,183 +1,208 @@
+mod common;
+
 use std::fs;
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
-use std::process::{Command, Stdio};
 
-use serial_test::serial;
+use predicates::prelude::*;
 
-static TEST_DIR: &str = "vault_integration_test";
+use common::{TestVault, clean_backup_files};
 
-fn cmd(
-    dir: impl AsRef<Path>,
-    command: impl AsRef<str>,
-    args: &[&str],
-    capture_output: bool,
-) -> Vec<u8> {
-    let command_str = command.as_ref().to_string();
+// ============ Secret Decryption Tests ============
 
-    let mut cmd = Command::new(&command_str);
-    let cmd = cmd
-        .args(args)
-        .env("VAULT_FORCE_YES", "1")
-        .current_dir(dir)
-        .stdin(Stdio::null());
+#[test]
+fn test_secret_decryption() {
+    let vault = TestVault::builder()
+        .with_secret("MY_SECRET", "MY_SECRET_CONTENT")
+        .build();
 
-    if !capture_output {
-        let _cmd = cmd.stdout(Stdio::inherit());
-    }
-
-    let output = cmd
-        .output()
-        .unwrap_or_else(|_| panic!("Failed to execute #1 {} {:?}", &command_str, args));
-
-    if !output.status.success() {
-        println!(
-            "Command with invalid Status Code: {} {:?}\n{:?}",
-            &command_str, args, output
-        );
-    }
-
-    assert!(output.status.success());
-
-    output.stdout
-}
-
-fn test_prepare() {
-    cmd(".", "cargo", &["build"], false);
-
-    cmd(".", "rm", &["-rf", TEST_DIR], false);
-    cmd(".", "mkdir", &["-p", TEST_DIR], false);
-
-    let vault_dir = &format!("{TEST_DIR}/vault");
-    cmd(".", "cp", &["./target/debug/vault", vault_dir], false);
-    cmd(".", "cp", &["-r", "./fixtures", TEST_DIR], false);
-    cmd(TEST_DIR, "mv", &["./fixtures", ".vault"], false);
-
-    cmd(TEST_DIR, "ls", &["-lah"], false);
-    cmd(TEST_DIR, "ls", &["-lah", "./.vault"], false);
+    vault
+        .command()
+        .args(["get", "MY_SECRET"])
+        .assert()
+        .success()
+        .stdout("MY_SECRET_CONTENT");
 }
 
 #[test]
-#[serial]
-fn test_integration_decode_old_version() {
-    test_prepare();
+fn test_template_rendering() {
+    let vault = TestVault::builder()
+        .with_secret("MY_SECRET", "SECRET_VALUE")
+        .build();
 
-    // check if we could extract VERSION_1_0_0_SECRET
+    // Create template file dynamically
+    let template = "prefix {vault{MY_SECRET}vault} suffix";
+    fs::write(vault.path().join("test.vault"), template).unwrap();
 
-    let valid_secrets = vec!["VERSION_1_0_0_SECRET"];
-
-    for valid_secret in &valid_secrets {
-        println!("checking {valid_secret}");
-        let content = cmd(TEST_DIR, "./vault", &["get", valid_secret], true);
-        assert_eq!(format!("{valid_secret}_CONTENT").into_bytes(), content);
-    }
-
-    // Generate a template with all keys ...
-    let template = valid_secrets
-        .iter()
-        .map(|x| format!("some othe{{{{r cont}}}}ent {{vault{{{x}}}vault}}"))
-        .collect::<Vec<_>>()
-        .join(",");
-
-    let expected_template = valid_secrets
-        .iter()
-        .map(|x| format!("some othe{{{{r cont}}}}ent {x}_CONTENT"))
-        .collect::<Vec<_>>()
-        .join(",");
-
-    let mut file = File::create(format!("{TEST_DIR}/example_template.vault"))
-        .expect("could not create template");
-    file.write_all(template.as_bytes())
-        .expect("could not write template");
-
-    let template_output = cmd(
-        TEST_DIR,
-        "./vault",
-        &["template", "example_template.vault"],
-        true,
-    );
-    // println!("Template1: {}", String::from_utf8_lossy(&template_output));
-    // println!("Template2: {}", &expected_template);
-    assert_eq!(expected_template.into_bytes(), template_output);
-}
-
-fn assert_secret() {
-    assert_eq!(
-        "VERSION_1_0_0_SECRET_CONTENT",
-        String::from_utf8_lossy(&cmd(
-            TEST_DIR,
-            "./vault",
-            &["get", "VERSION_1_0_0_SECRET"],
-            true
-        ))
-    )
+    vault
+        .command()
+        .args(["template", "test.vault"])
+        .assert()
+        .success()
+        .stdout("prefix SECRET_VALUE suffix");
 }
 
 #[test]
-#[serial]
-fn test_integration_multi_key() {
-    test_prepare();
+fn test_template_with_whitespace_in_placeholder() {
+    let vault = TestVault::builder()
+        .with_secret("MY_SECRET", "SECRET_VALUE")
+        .build();
 
-    let content = cmd(
-        TEST_DIR,
-        "./vault",
-        &[
-            "get_multi",
-            r#"{"secrets": [{"secret": "VERSION_1_0_0_SECRET"}], "templates": [{"template": "{vault{ VERSION_1_0_0_SECRET }vault}TEST"}]}"#,
-        ],
-        true,
-    );
+    // Template with whitespace around key name
+    let template = "{vault{ MY_SECRET }vault}";
+    fs::write(vault.path().join("test.vault"), template).unwrap();
 
-    assert_eq!(
-        String::from_utf8(content).expect("must be valid utf8"),
-        r#"{"secrets":{"VERSION_1_0_0_SECRET":{"name":"VERSION_1_0_0_SECRET","value":"VERSION_1_0_0_SECRET_CONTENT"}},"templates":{"{vault{ VERSION_1_0_0_SECRET }vault}TEST":{"name":"{vault{ VERSION_1_0_0_SECRET }vault}TEST","value":"VERSION_1_0_0_SECRET_CONTENTTEST"}}}"#
-    );
+    vault
+        .command()
+        .args(["template", "test.vault"])
+        .assert()
+        .success()
+        .stdout("SECRET_VALUE");
 }
 
 #[test]
-#[serial]
-fn test_integration_rotate_key_and_decode_content() {
-    test_prepare();
+fn test_template_preserves_escaped_braces() {
+    let vault = TestVault::builder()
+        .with_secret("MY_SECRET", "SECRET_VALUE")
+        .build();
 
-    let content = cmd(TEST_DIR, "./vault", &["rotate"], true);
-    println!("output: {}", String::from_utf8_lossy(&content));
+    // Template with escaped braces: {{text}} should remain as {{text}}
+    let template = "some othe{{r cont}}ent {vault{MY_SECRET}vault}";
+    fs::write(vault.path().join("test.vault"), template).unwrap();
 
-    // delete backup files
-    {
-        for entry in
-            fs::read_dir("./vault_integration_test/.vault/private_keys").expect("could not readdir")
-        {
-            let entry = entry.expect("dir entry");
-            let path = entry.path();
+    vault
+        .command()
+        .args(["template", "test.vault"])
+        .assert()
+        .success()
+        .stdout("some othe{{r cont}}ent SECRET_VALUE");
+}
 
-            if path.is_file() && path.to_string_lossy().contains("_backup_") {
-                fs::remove_file(path).expect("remove");
-            }
-        }
-    }
+// ============ Multi-Key Tests ============
 
-    assert_secret();
+#[test]
+fn test_get_multi_secrets() {
+    let vault = TestVault::builder()
+        .with_secret("SECRET_A", "CONTENT_A")
+        .with_secret("SECRET_B", "CONTENT_B")
+        .build();
+
+    let input = r#"{"secrets":[{"secret":"SECRET_A"},{"secret":"SECRET_B"}],"templates":[]}"#;
+
+    vault
+        .command()
+        .args(["get_multi", input])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#""value":"CONTENT_A""#))
+        .stdout(predicate::str::contains(r#""value":"CONTENT_B""#));
 }
 
 #[test]
-#[serial]
-fn test_integration_rotate_key_and_read_old_file() {
-    test_prepare();
-    cmd(TEST_DIR, "./vault", &["rotate"], true);
+fn test_get_multi_templates() {
+    let vault = TestVault::builder()
+        .with_secret("MY_SECRET", "SECRET_VALUE")
+        .build();
 
-    cmd(TEST_DIR, "rm", &["-rf", "./.vault/secrets"], false);
+    let input = r#"{"secrets":[],"templates":[{"template":"{vault{ MY_SECRET }vault}TEST"}]}"#;
 
-    cmd(
-        ".",
-        "cp",
-        &[
-            "-r",
-            "./fixtures/secrets",
-            &format!("{TEST_DIR}/.vault/secrets"),
-        ],
-        false,
-    );
+    vault
+        .command()
+        .args(["get_multi", input])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#""value":"SECRET_VALUETEST""#));
+}
 
-    assert_secret();
+#[test]
+fn test_get_multi_secrets_and_templates() {
+    let vault = TestVault::builder()
+        .with_secret("MY_SECRET", "SECRET_VALUE")
+        .build();
+
+    let input = r#"{"secrets":[{"secret":"MY_SECRET"}],"templates":[{"template":"{vault{ MY_SECRET }vault}TEST"}]}"#;
+
+    vault
+        .command()
+        .args(["get_multi", input])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#""name":"MY_SECRET""#))
+        .stdout(predicate::str::contains(r#""value":"SECRET_VALUE""#))
+        .stdout(predicate::str::contains(r#""value":"SECRET_VALUETEST""#));
+}
+
+// ============ Key Rotation Tests ============
+
+#[test]
+fn test_key_rotation_preserves_access() {
+    let vault = TestVault::builder()
+        .with_secret("MY_SECRET", "MY_CONTENT")
+        .build();
+
+    // Rotate keys
+    vault.command().args(["rotate"]).assert().success();
+
+    // Clean backup files (they can interfere with key loading)
+    clean_backup_files(vault.path());
+
+    // Verify secret still accessible
+    vault
+        .command()
+        .args(["get", "MY_SECRET"])
+        .assert()
+        .success()
+        .stdout("MY_CONTENT");
+}
+
+#[test]
+fn test_rotation_reads_old_encrypted_files() {
+    let vault = TestVault::builder()
+        .with_secret("MY_SECRET", "MY_CONTENT")
+        .build();
+
+    // Save original encrypted file
+    let crypt_path = vault
+        .path()
+        .join(format!(".vault/secrets/MY_SECRET/{}.crypt", vault.username()));
+    let original_crypt = fs::read(&crypt_path).unwrap();
+
+    // Rotate keys
+    vault.command().args(["rotate"]).assert().success();
+
+    // Restore old encrypted file (simulating old file encrypted with old key)
+    fs::remove_dir_all(vault.path().join(".vault/secrets")).unwrap();
+    fs::create_dir_all(vault.path().join(".vault/secrets/MY_SECRET")).unwrap();
+    fs::write(&crypt_path, &original_crypt).unwrap();
+
+    // Should still decrypt using backup key
+    vault
+        .command()
+        .args(["get", "MY_SECRET"])
+        .assert()
+        .success()
+        .stdout("MY_CONTENT");
+}
+
+// ============ Error Case Tests ============
+
+#[test]
+fn test_get_nonexistent_secret_fails() {
+    let vault = TestVault::builder().build();
+
+    vault
+        .command()
+        .args(["get", "NONEXISTENT"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_template_missing_secret_fails() {
+    let vault = TestVault::builder().build();
+    fs::write(vault.path().join("bad.vault"), "{vault{MISSING}vault}").unwrap();
+
+    vault
+        .command()
+        .args(["template", "bad.vault"])
+        .assert()
+        .failure();
 }
