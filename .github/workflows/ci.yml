@@ -38,7 +38,7 @@ jobs:
           targets: ${{ matrix.platform.target }}
 
       - name: Run tests
-        uses: clechasseur/rs-cargo@v2
+        uses: clechasseur/rs-cargo@v4
         if: ${{ matrix.platform.tests_integration == true }}
         with:
           use-cross: true
@@ -46,7 +46,7 @@ jobs:
           args: --target ${{ matrix.platform.target }} --bin vault
 
       - name: Compile
-        uses: clechasseur/rs-cargo@v2
+        uses: clechasseur/rs-cargo@v4
         with:
           use-cross: true
           command: build
