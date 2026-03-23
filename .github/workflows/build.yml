@@ -1,0 +1,76 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      upload-artifacts:
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform.target }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: ${{ inputs.upload-artifacts }}
+      matrix:
+        platform:
+          - { os: 'macos-15', target: 'x86_64-apple-darwin', arch: 'x86_64', osn: 'mac', tests_integration: true }
+          - { os: 'macos-15', target: 'aarch64-apple-darwin', arch: 'aarch64', osn: 'mac', tests_integration: false }
+          - { os: 'ubuntu-24.04', target: 'x86_64-unknown-linux-musl', arch: 'x86_64', osn: 'ubuntu-latest', tests_integration: true }
+          - { os: 'ubuntu-24.04-arm', target: 'aarch64-unknown-linux-musl', arch: 'aarch64', osn: 'ubuntu-latest', tests_integration: true }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Install musl tools
+        if: contains(matrix.platform.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Run tests
+        if: ${{ matrix.platform.tests_integration == true }}
+        run: cargo test --target ${{ matrix.platform.target }} --bin vault
+
+      - name: Compile
+        run: cargo build --release --target ${{ matrix.platform.target }} --bin vault
+
+      - name: Get version
+        if: ${{ inputs.upload-artifacts }}
+        id: version
+        run: echo "version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> $GITHUB_OUTPUT
+
+      - name: Copy artifacts
+        if: ${{ inputs.upload-artifacts }}
+        run: |
+          mkdir -p artifact
+          cp target/${{ matrix.platform.target }}/release/vault artifact/vault-v${{ steps.version.outputs.version }}-${{ matrix.platform.target }}
+          cp target/${{ matrix.platform.target }}/release/vault artifact/vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
+
+      - name: Upload artifact (versioned)
+        if: ${{ inputs.upload-artifacts }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: vault-v${{ steps.version.outputs.version }}-${{ matrix.platform.target }}
+          path: artifact/vault-v${{ steps.version.outputs.version }}-${{ matrix.platform.target }}
+
+      - name: Upload artifact (platform)
+        if: ${{ inputs.upload-artifacts }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}
+          path: artifact/vault_${{ matrix.platform.osn }}_${{ matrix.platform.arch }}

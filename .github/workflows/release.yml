@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      upload-artifacts: true
+
+  release:
+    name: Release
+    runs-on: ubuntu-24.04
+    needs: ["build"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check version was bumped
+        run: |
+          VERSION="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          if [ "$VERSION" = "$LATEST_TAG" ]; then
+            echo "::error::Cargo.toml version ($VERSION) matches latest tag. Bump the version before releasing."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: binaries
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          fail_on_unmatched_files: true
+          files: |
+            binaries/*/*
