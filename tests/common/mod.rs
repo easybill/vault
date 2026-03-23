@@ -75,13 +75,7 @@ impl TestVaultBuilder {
 
         // Create encrypted secrets
         for (name, content) in &self.secrets {
-            create_encrypted_secret(
-                temp_dir.path(),
-                &username,
-                name,
-                content,
-                &public_key_pem,
-            );
+            create_encrypted_secret(temp_dir.path(), &username, name, content, &public_key_pem);
         }
 
         TestVault { temp_dir, username }
@@ -103,7 +97,9 @@ fn create_vault_structure(base_path: &Path, username: &str) -> Vec<u8> {
     let private_pem = rsa
         .private_key_to_pem()
         .expect("Failed to export private key");
-    let public_pem = rsa.public_key_to_pem().expect("Failed to export public key");
+    let public_pem = rsa
+        .public_key_to_pem()
+        .expect("Failed to export public key");
 
     // Write private key
     let private_key_path = vault_dir
@@ -154,8 +150,8 @@ fn create_encrypted_secret(
     let vault_dir = base_path.join(".vault");
 
     // Parse the public key
-    let rsa =
-        Rsa::public_key_from_pem(public_key_pem).expect("Failed to parse public key for encryption");
+    let rsa = Rsa::public_key_from_pem(public_key_pem)
+        .expect("Failed to parse public key for encryption");
 
     // Generate AES key and IV
     let mut aes_key = [0u8; KEY_SIZE];
