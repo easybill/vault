@@ -21,7 +21,7 @@ jobs:
     name: Build ${{ matrix.platform.target }}
     runs-on: ${{ matrix.platform.os }}
     strategy:
-      fail-fast: ${{ inputs.upload-artifacts }}
+      fail-fast: true
       matrix:
         platform:
           - { os: 'macos-15', target: 'x86_64-apple-darwin', arch: 'x86_64', osn: 'mac', tests_integration: true }
