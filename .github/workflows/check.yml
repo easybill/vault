@@ -5,7 +5,7 @@ on:
   workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: check-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
