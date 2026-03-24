@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      upload-artifacts: true
+
+  release:
+    name: Release
+    runs-on: ubuntu-24.04
+    needs: ["build"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Verify tag matches Cargo.toml version
+        run: |
+          TAG="${{ github.ref_name }}"
+          CARGO_VERSION="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          if [ "$TAG" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag ($TAG) does not match Cargo.toml version ($CARGO_VERSION). Please update Cargo.toml before tagging."
+            exit 1
+          fi
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: binaries
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          fail_on_unmatched_files: true
+          files: |
+            binaries/*/*
