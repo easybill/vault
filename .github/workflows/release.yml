@@ -1,7 +1,9 @@
 name: Release
 
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   build:
@@ -16,18 +18,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
-      - name: Check version was bumped
+      - name: Verify tag matches Cargo.toml version
         run: |
-          VERSION="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          if [ "$VERSION" = "$LATEST_TAG" ]; then
-            echo "::error::Cargo.toml version ($VERSION) matches latest tag. Bump the version before releasing."
+          TAG="${{ github.ref_name }}"
+          CARGO_VERSION="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          if [ "$TAG" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag ($TAG) does not match Cargo.toml version ($CARGO_VERSION). Please update Cargo.toml before tagging."
             exit 1
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Download artifacts
         uses: actions/download-artifact@v8
@@ -37,7 +36,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.VERSION }}
+          tag_name: ${{ github.ref_name }}
           fail_on_unmatched_files: true
           files: |
             binaries/*/*
