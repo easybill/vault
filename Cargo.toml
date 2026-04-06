@@ -16,7 +16,7 @@ anyhow = { version = "1", features = ["backtrace"] }
 byteorder = "1"
 dirs = "6"
 globset = "0.4"
-self_update = "0.43"
+self_update = "0.44"
 semver = "1"
 
 [dev-dependencies]
