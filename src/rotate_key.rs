@@ -5,7 +5,7 @@ use anyhow::{Context, anyhow, bail};
 
 use crate::key::key_map::{KeyMap, KeyMapConfig, Subscription};
 use crate::ui::question::Question;
-use crate::{Result, create_keys};
+use crate::Result;
 
 pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
     let key_map = KeyMap::from_path(key_map_config)?;
@@ -28,7 +28,7 @@ pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
     let username_rotated = &format!("{username_current}_to_rotate");
 
     println!("1. generate new key");
-    create_keys(&format!("{username_current}_to_rotate")).context("create_keys")?;
+    crate::format::create_keys(&format!("{username_current}_to_rotate")).context("create_keys")?;
 
     let keymap = KeyMap::from_path(key_map_config)?;
 

@@ -4,8 +4,10 @@ use openssl::rsa::{Padding, Rsa};
 use openssl::symm::{Cipher, decrypt, encrypt};
 
 use crate::Result;
+use crate::format::UnencryptedVaultFile;
 use crate::key::{Pem, PrivateKey, PublicKey};
-use crate::proto::VaultFile;
+
+use super::proto::VaultFile;
 
 const KEY_SIZE: usize = 256 / 8;
 const IV_SIZE: usize = 128 / 8;
@@ -23,21 +25,6 @@ impl EncryptedFileContent {
 
     pub fn encrypted_content(&self) -> &[u8] {
         self.encrypted_content.as_slice()
-    }
-}
-
-#[derive(Clone)]
-pub struct UnencryptedVaultFile {
-    content: Vec<u8>,
-}
-
-impl UnencryptedVaultFile {
-    pub fn new(content: Vec<u8>) -> Self {
-        UnencryptedVaultFile { content }
-    }
-
-    pub fn content(&self) -> &[u8] {
-        self.content.as_slice()
     }
 }
 
@@ -96,7 +83,7 @@ impl Crypto {
         let content = decrypt(cipher, aes_key.as_slice(), Some(iv), content)
             .context("could not encrypt using content")?;
 
-        Ok(UnencryptedVaultFile { content })
+        Ok(UnencryptedVaultFile::new(content))
     }
 
     pub fn key_encrypt(public_key: &PublicKey, key: &[u8; KEY_SIZE]) -> Result<Vec<u8>> {

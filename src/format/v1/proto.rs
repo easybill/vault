@@ -5,17 +5,17 @@ use anyhow::{Context, bail};
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
 use crate::Result;
-use crate::crypto::EncryptedFileContent;
+use crate::format::VAULT_MAGIC_BYTE;
+
+use super::crypto::EncryptedFileContent;
+
+const VAULT_BODY_HEADER_SIZE: usize = 8 + 8;
 
 #[derive(Debug)]
 pub struct VaultFile<'a> {
     keyfile_content: Cow<'a, [u8]>,
     secret_content: Cow<'a, [u8]>,
 }
-
-const VAULT_MAGIC_BYTE: u16 = 4242;
-
-const VAULT_HEADER_SIZE: usize = 2 + 2 + 8 + 8;
 
 impl<'a> VaultFile<'a> {
     pub fn keyfile_content(&self) -> &[u8] {
@@ -33,27 +33,17 @@ impl<'a> VaultFile<'a> {
         }
     }
 
-    pub fn open(mut content: impl Read) -> Result<Self> {
-        let mut header_buffer = vec![0; VAULT_HEADER_SIZE];
+    /// Read the v1 body from a reader. Assumes the common header (magic byte + version)
+    /// has already been consumed by the dispatch layer.
+    pub fn open_body(mut content: impl Read) -> Result<Self> {
+        let mut header_buffer = vec![0; VAULT_BODY_HEADER_SIZE];
 
         content
             .read_exact(&mut header_buffer)
             .context("could not read header")?;
 
-        let magic_byte = BigEndian::read_u16(&header_buffer[0..2]);
-
-        if magic_byte != VAULT_MAGIC_BYTE {
-            bail!("invalid file, magic byte is wrong");
-        }
-
-        let version = BigEndian::read_u16(&header_buffer[2..4]);
-
-        if version != 1 {
-            bail!("only version is supported, found {version}");
-        }
-
-        let keyfile_size = BigEndian::read_u64(&header_buffer[4..12]) as usize;
-        let secret_bytes_size = BigEndian::read_u64(&header_buffer[12..20]) as usize;
+        let keyfile_size = BigEndian::read_u64(&header_buffer[0..8]) as usize;
+        let secret_bytes_size = BigEndian::read_u64(&header_buffer[8..16]) as usize;
 
         if keyfile_size > 50_000 || secret_bytes_size > 1_000_000_000 {
             // ensure nobody kills us with a wrong vault file :)

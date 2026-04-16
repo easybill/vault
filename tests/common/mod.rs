@@ -139,7 +139,8 @@ fn create_vault_structure(base_path: &Path, username: &str) -> Vec<u8> {
     public_pem
 }
 
-/// Encrypt content and write as a .crypt file in the vault file format.
+/// Encrypt content and write as a .crypt file in the v1 vault file format
+/// (RSA + AES-256-CBC, binary header with magic byte 4242 and version 1).
 fn create_encrypted_secret(
     base_path: &Path,
     username: &str,
