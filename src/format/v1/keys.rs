@@ -79,6 +79,7 @@ pub fn load_public_key_v1(path: &str) -> Result<PublicKey, Error> {
 
             filename
         },
+        is_v2: false,
     })
 }
 
@@ -105,7 +106,7 @@ pub fn load_private_key_v1(path: &str) -> Result<PrivateKey, Error> {
     })
 }
 
-/// Scan a directory for v1 public keys (`.pub.pem` files).
+/// Scan a directory for v1 public keys (`.pub.pem` files, excluding `.v2.pub.pem`).
 pub fn build_keys_from_path_v1(root_path: &Path) -> Result<Vec<PublicKey>> {
     let mut buffer = vec![];
 
@@ -113,8 +114,9 @@ pub fn build_keys_from_path_v1(root_path: &Path) -> Result<Vec<PublicKey>> {
 
     for raw_path in paths {
         let path = raw_path.context("could not parse path")?.path();
+        let path_str = path.display().to_string();
 
-        if !path.display().to_string().ends_with(".pub.pem") {
+        if !path_str.ends_with(".pub.pem") || path_str.ends_with(".v2.pub.pem") {
             continue;
         }
 
@@ -161,6 +163,11 @@ pub fn build_private_pems_v1(path_private_key: &str) -> Result<Vec<Pem>> {
             }
 
             if path_as_string.ends_with(".pub.pem") {
+                continue;
+            }
+
+            // Skip v2 key files
+            if path_as_string.ends_with(".v2.pem") {
                 continue;
             }
 

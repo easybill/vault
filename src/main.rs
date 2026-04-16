@@ -7,6 +7,7 @@ use semver::{Version, VersionReq};
 
 use crate::commands::get_multi::get_multi;
 use crate::filesystem::{Filesystem, FilesystemCheckResult};
+use crate::format::FormatVersion;
 use crate::key::key_map::{KeyMap, KeyMapConfig};
 use crate::rotate_key::rotate_keys;
 use crate::template::Template;
@@ -33,6 +34,12 @@ fn run() -> Result<()> {
             Arg::new("yes")
                 .short('y')
                 .help("always answers questions with yes")
+        )
+        .arg(
+            Arg::new("v2")
+                .long("v2")
+                .num_args(0)
+                .help("use v2 post-quantum format (ML-KEM-1024 + AES-256-GCM) for key generation and encryption")
         )
         .arg(
             Arg::new("expect_version")
@@ -85,6 +92,15 @@ fn run() -> Result<()> {
                 ),
         )
         .subcommand(
+            clap::Command::new("create-ml-kem-key")
+                .about("creates a new ML-KEM-1024 post-quantum keypair")
+                .arg(
+                    Arg::new("username")
+                        .required(true)
+                        .help("username for the new keypair"),
+                ),
+        )
+        .subcommand(
             clap::Command::new("rotate")
                 .about("rotated the private key")
         )
@@ -96,6 +112,12 @@ fn run() -> Result<()> {
     if let Some(yes) = matches.get_one::<bool>("yes").copied() {
         Question::set_yes(yes);
     }
+
+    let format_version = if matches.get_flag("v2") {
+        FormatVersion::V2
+    } else {
+        FormatVersion::V1
+    };
 
     if let Some(min_version) = matches.get_one::<String>("expect_version") {
         let version_requirement = VersionReq::parse(min_version).context(
@@ -193,13 +215,23 @@ fn run() -> Result<()> {
             .get_one::<String>("username")
             .expect("username must exist");
 
-        format::create_keys(username)?;
+        format::create_keys(username, FormatVersion::V1)?;
+
+        return Ok(());
+    }
+
+    if let Some(matches) = matches.subcommand_matches("create-ml-kem-key") {
+        let username = matches
+            .get_one::<String>("username")
+            .expect("username must exist");
+
+        format::create_keys(username, FormatVersion::V2)?;
 
         return Ok(());
     }
 
     if let Some(_matches) = matches.subcommand_matches("rotate") {
-        rotate_keys(&KeyMapConfig { path_private_key }).context("rotate keys")?;
+        rotate_keys(&KeyMapConfig { path_private_key }, format_version).context("rotate keys")?;
         return Ok(());
     }
 
@@ -207,7 +239,7 @@ fn run() -> Result<()> {
     println!("create key map.");
     println!();
 
-    if scan_for_new_secrets(&key_map)? > 0 {
+    if scan_for_new_secrets(&key_map, format_version)? > 0 {
         // refresh the key map
         key_map = KeyMap::from_path(&KeyMapConfig { path_private_key })?;
     }
@@ -237,7 +269,7 @@ fn run() -> Result<()> {
         if Question::confirm(
             "   you've the required right to fulfill the subscription, give him access?",
         ) {
-            key_map.fulfill_subscription(open_subscription)?;
+            key_map.fulfill_subscription(open_subscription, format_version)?;
         } else {
             println!("maybe later");
         }
@@ -263,7 +295,7 @@ pub fn enter_filesystem_wizard() -> Result<()> {
     Ok(())
 }
 
-pub fn scan_for_new_secrets(key_map: &KeyMap) -> Result<usize> {
+pub fn scan_for_new_secrets(key_map: &KeyMap, version: FormatVersion) -> Result<usize> {
     let mut new_secrets_created = 0;
 
     let secret_path = "./.vault/secrets/";
@@ -291,7 +323,7 @@ pub fn scan_for_new_secrets(key_map: &KeyMap) -> Result<usize> {
             continue;
         }
 
-        key_map.add_new_secret(&path_as_string)?;
+        key_map.add_new_secret(&path_as_string, version)?;
 
         new_secrets_created += 1;
     }

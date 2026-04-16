@@ -8,7 +8,7 @@ use serde_derive::Deserialize;
 use toml;
 
 use crate::Result;
-use crate::format::{self, UnencryptedVaultFile};
+use crate::format::{self, FormatVersion, UnencryptedVaultFile};
 use crate::key::{Pem, PublicKey};
 
 #[derive(Debug)]
@@ -307,7 +307,7 @@ impl KeyMap {
         self.decrypt_subscription(subscription).is_ok()
     }
 
-    pub fn fulfill_subscription(&self, subscription: &Subscription) -> Result<()> {
+    pub fn fulfill_subscription(&self, subscription: &Subscription, version: FormatVersion) -> Result<()> {
         let unencrypted_vault_file =
             self.decrypt_subscription(subscription).with_context(|| {
                 format!(
@@ -336,7 +336,21 @@ impl KeyMap {
             bail!("could not find key for user");
         }
 
-        for public_key in public_keys_for_user.iter() {
+        let is_v2 = matches!(version, FormatVersion::V2);
+        let matching_keys: Vec<_> = public_keys_for_user
+            .iter()
+            .filter(|k| k.is_v2() == is_v2)
+            .collect();
+
+        if matching_keys.is_empty() {
+            bail!(
+                "could not find a {} key for user {}",
+                if is_v2 { "v2" } else { "v1" },
+                subscription.username()
+            );
+        }
+
+        for public_key in matching_keys {
             let new_filename = format!(
                 "./.vault/secrets/{subscription}/{key}.crypt",
                 subscription = subscription.name(),
@@ -348,7 +362,7 @@ impl KeyMap {
             let mut f = File::create(&new_filename)
                 .with_context(|| format!("could not create new encrypted file {new_filename}"))?;
 
-            format::encrypt(public_key, &unencrypted_vault_file, &mut f)
+            format::encrypt(public_key, &unencrypted_vault_file, &mut f, version)
                 .with_context(|| {
                     format!(
                         "could not encrypt data using key {key}",
@@ -380,10 +394,18 @@ impl KeyMap {
         buffer
     }
 
-    pub fn add_new_secret(&self, filepath: &str) -> Result<()> {
-        let pem = self.private_pems().first().with_context(|| {
-            format!("could not fine private key for you, no idea how to encrypt {filepath}")
-        })?;
+    pub fn add_new_secret(&self, filepath: &str, version: FormatVersion) -> Result<()> {
+        let is_v2 = matches!(version, FormatVersion::V2);
+        let pem = self
+            .private_pems()
+            .iter()
+            .find(|p| p.is_v2() == is_v2)
+            .with_context(|| {
+                format!(
+                    "could not find a {} private key for you, no idea how to encrypt {filepath}",
+                    if is_v2 { "v2" } else { "v1" }
+                )
+            })?;
 
         let file_content = {
             let mut f =
@@ -407,7 +429,7 @@ impl KeyMap {
         let mut f = File::create(&new_filename)
             .with_context(|| format!("could not create new encrypted file {new_filename}"))?;
 
-        format::encrypt(pem.public_key(), &unencrypted_file, &mut f)
+        format::encrypt(pem.public_key(), &unencrypted_file, &mut f, version)
             .with_context(|| format!("could not write to file {new_filename}"))?;
 
         Ok(())

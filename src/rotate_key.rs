@@ -3,11 +3,12 @@ use std::time::SystemTime;
 
 use anyhow::{Context, anyhow, bail};
 
+use crate::format::FormatVersion;
 use crate::key::key_map::{KeyMap, KeyMapConfig, Subscription};
 use crate::ui::question::Question;
 use crate::Result;
 
-pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
+pub fn rotate_keys(key_map_config: &KeyMapConfig, version: FormatVersion) -> Result<()> {
     let key_map = KeyMap::from_path(key_map_config)?;
 
     let pems = key_map
@@ -28,12 +29,12 @@ pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
     let username_rotated = &format!("{username_current}_to_rotate");
 
     println!("1. generate new key");
-    crate::format::create_keys(&format!("{username_current}_to_rotate")).context("create_keys")?;
+    crate::format::create_keys(&format!("{username_current}_to_rotate"), version).context("create_keys")?;
 
     let keymap = KeyMap::from_path(key_map_config)?;
 
     println!("2. allow access to all keys");
-    allow_access_to_all_keys(&keymap, username_rotated).context("allow_access_to_all_keys")?;
+    allow_access_to_all_keys(&keymap, username_rotated, version).context("allow_access_to_all_keys")?;
     println!("2. delete the old key");
     delete_user(username_current).context("delete_user")?;
     println!("3. rename user");
@@ -198,7 +199,7 @@ fn delete_user(username: &str) -> Result<()> {
     Ok(())
 }
 
-fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<()> {
+fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str, version: FormatVersion) -> Result<()> {
     let secret_directory_path = "./.vault/secrets/";
 
     let secret_directory_path_readdir = fs::read_dir(secret_directory_path).with_context(|| {
@@ -218,7 +219,7 @@ fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<(
         let subscription =
             Subscription::new(username_rotated.to_string(), secret_name.clone(), false);
 
-        match keymap.fulfill_subscription(&subscription) {
+        match keymap.fulfill_subscription(&subscription, version) {
             Ok(_k) => {}
             Err(_e) => {
                 let crypt_file_path =

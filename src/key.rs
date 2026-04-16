@@ -4,6 +4,7 @@ pub mod key_map;
 pub struct PublicKey {
     pub(crate) data: Vec<u8>,
     pub(crate) name: String,
+    pub(crate) is_v2: bool,
 }
 
 #[derive(Debug)]
@@ -37,6 +38,10 @@ impl Pem {
     pub fn public_key(&self) -> &PublicKey {
         &self.public_key
     }
+
+    pub fn is_v2(&self) -> bool {
+        self.public_key.is_v2
+    }
 }
 
 impl PublicKey {
@@ -46,6 +51,10 @@ impl PublicKey {
 
     pub fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    pub fn is_v2(&self) -> bool {
+        self.is_v2
     }
 }
 

@@ -150,6 +150,7 @@ mod test {
         let public_key = PublicKey {
             data: rsa.public_key_to_pem().unwrap(),
             name: "public key".to_string(),
+            is_v2: false,
         };
 
         Pem::new(private_key, public_key)
