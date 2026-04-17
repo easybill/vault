@@ -3,6 +3,7 @@ use std::path::Path;
 
 use anyhow::{Context, bail};
 use byteorder::{BigEndian, ByteOrder};
+use zeroize::Zeroize;
 
 use crate::Result;
 use crate::key::{Pem, PublicKey};
@@ -19,7 +20,7 @@ pub enum FormatVersion {
     V2,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UnencryptedVaultFile {
     content: Vec<u8>,
 }
@@ -31,6 +32,12 @@ impl UnencryptedVaultFile {
 
     pub fn content(&self) -> &[u8] {
         self.content.as_slice()
+    }
+}
+
+impl Drop for UnencryptedVaultFile {
+    fn drop(&mut self) {
+        self.content.zeroize();
     }
 }
 
@@ -81,17 +88,8 @@ pub fn create_keys(username: &str, version: FormatVersion) -> Result<Pem> {
 pub fn build_keys_from_path(root_path: &Path) -> Result<Vec<PublicKey>> {
     let mut keys = Vec::new();
 
-    if let Ok(v1_keys) = v1::keys::build_keys_from_path_v1(root_path) {
-        keys.extend(v1_keys);
-    }
-    if let Ok(v2_keys) = v2::keys::build_keys_from_path_v2(root_path) {
-        keys.extend(v2_keys);
-    }
-
-    if keys.is_empty() {
-        // Fall back to returning the v1 error for diagnostics.
-        v1::keys::build_keys_from_path_v1(root_path)?;
-    }
+    keys.extend(v1::keys::build_keys_from_path_v1(root_path)?);
+    keys.extend(v2::keys::build_keys_from_path_v2(root_path)?);
 
     Ok(keys)
 }
@@ -101,17 +99,38 @@ pub fn build_keys_from_path(root_path: &Path) -> Result<Vec<PublicKey>> {
 pub fn build_private_pems(path_private_key: &str) -> Result<Vec<Pem>> {
     let mut pems = Vec::new();
 
-    if let Ok(v1_pems) = v1::keys::build_private_pems_v1(path_private_key) {
-        pems.extend(v1_pems);
-    }
-    if let Ok(v2_pems) = v2::keys::build_private_pems_v2(path_private_key) {
-        pems.extend(v2_pems);
-    }
-
-    if pems.is_empty() {
-        // Fall back to returning the v1 error for diagnostics.
-        v1::keys::build_private_pems_v1(path_private_key)?;
-    }
+    pems.extend(v1::keys::build_private_pems_v1(path_private_key)?);
+    pems.extend(v2::keys::build_private_pems_v2(path_private_key)?);
 
     Ok(pems)
+}
+
+pub fn validate_private_pems(pems: &[Pem]) -> Result<()> {
+    for pem in pems {
+        match pem.is_v2() {
+            true => v2::keys::validate_pem_v2(pem)?,
+            false => v1::keys::validate_pem_v1(pem)?,
+        }
+    }
+
+    Ok(())
+}
+
+pub fn resolve_write_version(pems: &[Pem], explicit_v2: bool) -> Result<FormatVersion> {
+    if explicit_v2 {
+        return Ok(FormatVersion::V2);
+    }
+
+    let v1_count = pems.iter().filter(|pem| !pem.is_v2()).count();
+    let v2_count = pems.iter().filter(|pem| pem.is_v2()).count();
+
+    if v1_count == 0 && v2_count == 0 {
+        bail!("there is no private key");
+    }
+
+    if v1_count == 0 && v2_count > 0 {
+        return Ok(FormatVersion::V2);
+    }
+
+    Ok(FormatVersion::V1)
 }

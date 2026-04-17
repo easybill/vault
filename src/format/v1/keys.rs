@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Error, bail};
+use openssl::rsa::Rsa;
 
 use crate::Result;
 use crate::key::{Pem, PrivateKey, PublicKey};
@@ -62,8 +63,11 @@ impl Key {
 pub fn load_public_key_v1(path: &str) -> Result<PublicKey, Error> {
     const FILE_EXTENSION: &str = ".pub.pem";
 
+    let data = Key::load_from_file_v1(path)?;
+    Rsa::public_key_from_pem(&data).with_context(|| format!("invalid public key {path}"))?;
+
     Ok(PublicKey {
-        data: Key::load_from_file_v1(path)?,
+        data,
         name: {
             let mut pieces = path.rsplit('/');
             let mut filename: String = match pieces.next() {
@@ -85,8 +89,11 @@ pub fn load_public_key_v1(path: &str) -> Result<PublicKey, Error> {
 
 /// Load a v1 private key from a `.pem` or `.pem.pgp` file (PKCS#1 PEM format).
 pub fn load_private_key_v1(path: &str) -> Result<PrivateKey, Error> {
+    let data = Key::load_from_file_v1(path)?;
+    Rsa::private_key_from_pem(&data).with_context(|| format!("invalid private key {path}"))?;
+
     Ok(PrivateKey {
-        data: Key::load_from_file_v1(path)?,
+        data,
         name: {
             let mut pieces = path.rsplit('/');
             let filename: String = match pieces.next() {
@@ -167,7 +174,7 @@ pub fn build_private_pems_v1(path_private_key: &str) -> Result<Vec<Pem>> {
             }
 
             // Skip v2 key files
-            if path_as_string.ends_with(".v2.pem") {
+            if path_as_string.ends_with(".v2.pem") || path_as_string.ends_with(".v2.pem.pgp") {
                 continue;
             }
 
@@ -215,4 +222,28 @@ pub fn build_private_pems_v1(path_private_key: &str) -> Result<Vec<Pem>> {
     }
 
     Ok(buffer)
+}
+
+pub fn validate_pem_v1(pem: &Pem) -> Result<()> {
+    let private_key = Rsa::private_key_from_pem(pem.private_key().data())
+        .with_context(|| format!("invalid private key {}", pem.private_key().name()))?;
+    let public_key = Rsa::public_key_from_pem(pem.public_key().data())
+        .with_context(|| format!("invalid public key {}", pem.public_key().name()))?;
+
+    let expected_public_der = private_key
+        .public_key_to_der()
+        .context("could not derive public key from private key")?;
+    let actual_public_der = public_key
+        .public_key_to_der()
+        .context("could not encode public key")?;
+
+    if expected_public_der != actual_public_der {
+        bail!(
+            "private key {} does not match public key {}",
+            pem.private_key().name(),
+            pem.public_key().name()
+        );
+    }
+
+    Ok(())
 }

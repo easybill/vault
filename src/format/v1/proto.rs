@@ -4,10 +4,9 @@ use std::io::{Read, Write};
 use anyhow::{Context, bail};
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
+use super::crypto::EncryptedFileContent;
 use crate::Result;
 use crate::format::VAULT_MAGIC_BYTE;
-
-use super::crypto::EncryptedFileContent;
 
 const VAULT_BODY_HEADER_SIZE: usize = 8 + 8;
 

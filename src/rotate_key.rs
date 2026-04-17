@@ -3,10 +3,37 @@ use std::time::SystemTime;
 
 use anyhow::{Context, anyhow, bail};
 
+use crate::Result;
 use crate::format::FormatVersion;
 use crate::key::key_map::{KeyMap, KeyMapConfig, Subscription};
 use crate::ui::question::Question;
-use crate::Result;
+
+fn private_key_path(username: &str, version: FormatVersion) -> String {
+    match version {
+        FormatVersion::V1 => format!("./.vault/private_keys/{username}.pem"),
+        FormatVersion::V2 => format!("./.vault/private_keys/{username}.v2.pem"),
+    }
+}
+
+fn public_key_path(username: &str, version: FormatVersion) -> String {
+    match version {
+        FormatVersion::V1 => format!("./.vault/private_keys/{username}.pub.pem"),
+        FormatVersion::V2 => format!("./.vault/private_keys/{username}.v2.pub.pem"),
+    }
+}
+
+fn user_public_key_path(
+    directory_username: &str,
+    key_username: &str,
+    version: FormatVersion,
+) -> String {
+    match version {
+        FormatVersion::V1 => format!("./.vault/keys/{directory_username}/{key_username}.pub.pem"),
+        FormatVersion::V2 => {
+            format!("./.vault/keys/{directory_username}/{key_username}.v2.pub.pem")
+        }
+    }
+}
 
 pub fn rotate_keys(key_map_config: &KeyMapConfig, version: FormatVersion) -> Result<()> {
     let key_map = KeyMap::from_path(key_map_config)?;
@@ -14,9 +41,20 @@ pub fn rotate_keys(key_map_config: &KeyMapConfig, version: FormatVersion) -> Res
     let pems = key_map
         .private_pems()
         .iter()
-        .filter(|x| !x.name().contains("_backup_"))
+        .filter(|x| {
+            !x.name().contains("_backup_") && x.is_v2() == matches!(version, FormatVersion::V2)
+        })
         .collect::<Vec<_>>();
-    let pem = pems.first().unwrap(); // todo, based on filename
+    let pem = pems.first().ok_or_else(|| {
+        anyhow!(
+            "could not find a {} private key to rotate",
+            if matches!(version, FormatVersion::V2) {
+                "v2"
+            } else {
+                "v1"
+            }
+        )
+    })?;
 
     if !Question::confirm(&format!(
         "do you want to rotate your private key {:?}?",
@@ -29,22 +67,72 @@ pub fn rotate_keys(key_map_config: &KeyMapConfig, version: FormatVersion) -> Res
     let username_rotated = &format!("{username_current}_to_rotate");
 
     println!("1. generate new key");
-    crate::format::create_keys(&format!("{username_current}_to_rotate"), version).context("create_keys")?;
+    crate::format::create_keys(&format!("{username_current}_to_rotate"), version)
+        .context("create_keys")?;
 
     let keymap = KeyMap::from_path(key_map_config)?;
 
     println!("2. allow access to all keys");
-    allow_access_to_all_keys(&keymap, username_rotated, version).context("allow_access_to_all_keys")?;
+    allow_access_to_all_keys(&keymap, username_rotated, version)
+        .context("allow_access_to_all_keys")?;
+    validate_rotation_paths(username_current, username_rotated, version)
+        .context("validate_rotation_paths")?;
     println!("2. delete the old key");
-    delete_user(username_current).context("delete_user")?;
+    delete_user(username_current, version).context("delete_user")?;
     println!("3. rename user");
-    rename_user(username_rotated, username_current).context("rename_user")?;
+    rename_user(username_rotated, username_current, version).context("rename_user")?;
     println!("the key has been rotated, the old key is still there and has a backup suffix.");
 
     Ok(())
 }
 
-fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
+fn validate_rotation_paths(
+    username_current: &str,
+    username_rotated: &str,
+    version: FormatVersion,
+) -> Result<()> {
+    for path in [
+        private_key_path(username_rotated, version),
+        public_key_path(username_rotated, version),
+        user_public_key_path(username_rotated, username_rotated, version),
+    ] {
+        fs::metadata(&path).with_context(|| format!("rotation expected path {path} to exist"))?;
+    }
+    let rotated_directory = format!("./.vault/keys/{username_rotated}");
+    let metadata = fs::metadata(&rotated_directory)
+        .with_context(|| format!("rotation expected path {rotated_directory} to exist"))?;
+    if !metadata.is_dir() {
+        bail!("rotation expected directory {rotated_directory}");
+    }
+
+    let secret_directory_path = "./.vault/secrets/";
+    let secret_directory_path_readdir = fs::read_dir(secret_directory_path).with_context(|| {
+        format!("could not read subscription path. directory is missing? {secret_directory_path}")
+    })?;
+
+    for path in secret_directory_path_readdir {
+        let path = path.context("could not read directory")?;
+        if !path.path().is_dir() {
+            continue;
+        }
+
+        let secret_name = path.file_name().to_string_lossy().to_string();
+        let rotated_crypt_file_path =
+            format!("./.vault/secrets/{secret_name}/{username_rotated}.crypt");
+        let current_crypt_file_path =
+            format!("./.vault/secrets/{secret_name}/{username_current}.crypt");
+
+        if fs::metadata(&current_crypt_file_path).is_ok()
+            && fs::metadata(&rotated_crypt_file_path).is_err()
+        {
+            bail!("rotation expected re-encrypted secret at {rotated_crypt_file_path}");
+        }
+    }
+
+    Ok(())
+}
+
+fn rename_user(username_from: &str, username_to: &str, version: FormatVersion) -> Result<()> {
     struct Rename {
         from: String,
         to: String,
@@ -53,13 +141,13 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
     let mut renames = vec![];
 
     renames.push(Rename {
-        from: format!("./.vault/private_keys/{username_from}.pem"),
-        to: format!("./.vault/private_keys/{username_to}.pem"),
+        from: private_key_path(username_from, version),
+        to: private_key_path(username_to, version),
     });
 
     renames.push(Rename {
-        from: format!("./.vault/private_keys/{username_from}.pub.pem"),
-        to: format!("./.vault/private_keys/{username_to}.pub.pem"),
+        from: public_key_path(username_from, version),
+        to: public_key_path(username_to, version),
     });
 
     renames.push(Rename {
@@ -68,8 +156,8 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
     });
 
     renames.push(Rename {
-        from: format!("./.vault/keys/{username_to}/{username_from}.pub.pem"),
-        to: format!("./.vault/keys/{username_to}/{username_to}.pub.pem"),
+        from: user_public_key_path(username_to, username_from, version),
+        to: user_public_key_path(username_to, username_to, version),
     });
 
     let secret_directory_path = "./.vault/secrets/";
@@ -121,7 +209,7 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
     Ok(())
 }
 
-fn delete_user(username: &str) -> Result<()> {
+fn delete_user(username: &str, version: FormatVersion) -> Result<()> {
     // delete all secrets
 
     let secret_directory_path = "./.vault/secrets/";
@@ -188,18 +276,22 @@ fn delete_user(username: &str) -> Result<()> {
     };
 
     let _ = fs::rename(
-        format!("./.vault/private_keys/{username}.pem"),
-        format!("./.vault/private_keys/{username}_backup_{timestamp}.pem"),
+        private_key_path(username, version),
+        private_key_path(&format!("{username}_backup_{timestamp}"), version),
     );
     let _ = fs::rename(
-        format!("./.vault/private_keys/{username}.pub.pem"),
-        format!("./.vault/private_keys/{username}_backup_{timestamp}.pub.pem"),
+        public_key_path(username, version),
+        public_key_path(&format!("{username}_backup_{timestamp}"), version),
     );
 
     Ok(())
 }
 
-fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str, version: FormatVersion) -> Result<()> {
+fn allow_access_to_all_keys(
+    keymap: &KeyMap,
+    username_rotated: &str,
+    version: FormatVersion,
+) -> Result<()> {
     let secret_directory_path = "./.vault/secrets/";
 
     let secret_directory_path_readdir = fs::read_dir(secret_directory_path).with_context(|| {

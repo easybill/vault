@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::Read;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, anyhow, bail};
 use globset::Glob;
@@ -65,6 +66,79 @@ impl Subscription {
 }
 
 impl KeyMap {
+    fn encrypted_payload(
+        public_key: &PublicKey,
+        unencrypted_vault_file: &UnencryptedVaultFile,
+        version: FormatVersion,
+    ) -> Result<Vec<u8>> {
+        let mut encrypted = Vec::new();
+        format::encrypt(public_key, unencrypted_vault_file, &mut encrypted, version)?;
+        Ok(encrypted)
+    }
+
+    fn temp_path(path: &str, label: &str) -> Result<String> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .context("system time before UNIX_EPOCH")?
+            .as_nanos();
+        Ok(format!("{path}.{label}.{timestamp}.tmp"))
+    }
+
+    fn write_atomic(path: &str, content: &[u8]) -> Result<()> {
+        let temp_path = Self::temp_path(path, "vault_write")?;
+        fs::write(&temp_path, content)
+            .with_context(|| format!("could not write temporary file {temp_path}"))?;
+
+        if let Err(error) = fs::rename(&temp_path, path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(anyhow!("could not move {temp_path} to {path}, {error}"));
+        }
+
+        Ok(())
+    }
+
+    fn matching_public_keys_for_user(
+        &self,
+        username: &str,
+        version: FormatVersion,
+    ) -> Result<Vec<&PublicKey>> {
+        let public_keys_for_user: &Vec<PublicKey> = {
+            let mut keys = None;
+
+            for entry in &self.entries {
+                if entry.user != username {
+                    continue;
+                }
+
+                keys = Some(&entry.keys);
+                break;
+            }
+
+            keys
+        }
+        .ok_or_else(|| anyhow!("could not find keys for user"))?;
+
+        if public_keys_for_user.is_empty() {
+            bail!("could not find key for user");
+        }
+
+        let is_v2 = matches!(version, FormatVersion::V2);
+        let matching_keys: Vec<_> = public_keys_for_user
+            .iter()
+            .filter(|k| k.is_v2() == is_v2)
+            .collect();
+
+        if matching_keys.is_empty() {
+            bail!(
+                "could not find a {} key for user {}",
+                if is_v2 { "v2" } else { "v1" },
+                username
+            );
+        }
+
+        Ok(matching_keys)
+    }
+
     pub fn subscriptions(config: &ConfigToml) -> Result<Vec<String>> {
         // read the content of ./.vault/secrets/ to find secrets that are matching a glob pattern.
         let available_secrets = {
@@ -285,8 +359,7 @@ impl KeyMap {
 
         for pem in &self.pems {
             for file in &possible_files {
-                let f =
-                    File::open(file).with_context(|| format!("could not read file {file}"))?;
+                let f = File::open(file).with_context(|| format!("could not read file {file}"))?;
 
                 match format::decrypt(pem, f) {
                     Ok(unencrypted_vault_file) => return Ok(unencrypted_vault_file),
@@ -307,7 +380,22 @@ impl KeyMap {
         self.decrypt_subscription(subscription).is_ok()
     }
 
-    pub fn fulfill_subscription(&self, subscription: &Subscription, version: FormatVersion) -> Result<()> {
+    pub fn could_fulfill_subscription_with_version(
+        &self,
+        subscription: &Subscription,
+        version: FormatVersion,
+    ) -> bool {
+        self.decrypt_subscription(subscription).is_ok()
+            && self
+                .matching_public_keys_for_user(subscription.username(), version)
+                .is_ok()
+    }
+
+    pub fn fulfill_subscription(
+        &self,
+        subscription: &Subscription,
+        version: FormatVersion,
+    ) -> Result<()> {
         let unencrypted_vault_file =
             self.decrypt_subscription(subscription).with_context(|| {
                 format!(
@@ -316,59 +404,28 @@ impl KeyMap {
                 )
             })?;
 
-        let public_keys_for_user: &Vec<PublicKey> = {
-            let mut keys = None;
-
-            for entry in &self.entries {
-                if entry.user != subscription.username() {
-                    continue;
-                }
-
-                keys = Some(&entry.keys);
-                break;
-            }
-
-            keys
-        }
-        .ok_or_else(|| anyhow!("could not find keys for user"))?;
-
-        if public_keys_for_user.is_empty() {
-            bail!("could not find key for user");
-        }
-
-        let is_v2 = matches!(version, FormatVersion::V2);
-        let matching_keys: Vec<_> = public_keys_for_user
-            .iter()
-            .filter(|k| k.is_v2() == is_v2)
-            .collect();
-
-        if matching_keys.is_empty() {
-            bail!(
-                "could not find a {} key for user {}",
-                if is_v2 { "v2" } else { "v1" },
-                subscription.username()
-            );
-        }
-
-        for public_key in matching_keys {
+        let mut encrypted_files = Vec::new();
+        for public_key in self.matching_public_keys_for_user(subscription.username(), version)? {
             let new_filename = format!(
                 "./.vault/secrets/{subscription}/{key}.crypt",
                 subscription = subscription.name(),
                 key = public_key.name()
             );
 
-            println!("creating file {new_filename}");
-
-            let mut f = File::create(&new_filename)
-                .with_context(|| format!("could not create new encrypted file {new_filename}"))?;
-
-            format::encrypt(public_key, &unencrypted_vault_file, &mut f, version)
+            let encrypted = Self::encrypted_payload(public_key, &unencrypted_vault_file, version)
                 .with_context(|| {
-                    format!(
-                        "could not encrypt data using key {key}",
-                        key = public_key.name()
-                    )
-                })?;
+                format!(
+                    "could not encrypt data using key {key}",
+                    key = public_key.name()
+                )
+            })?;
+            encrypted_files.push((new_filename, encrypted));
+        }
+
+        for (new_filename, encrypted) in &encrypted_files {
+            println!("creating file {new_filename}");
+            Self::write_atomic(new_filename, encrypted)
+                .with_context(|| format!("could not create new encrypted file {new_filename}"))?;
         }
 
         Ok(())
@@ -419,18 +476,31 @@ impl KeyMap {
 
         let unencrypted_file = UnencryptedVaultFile::new(file_content);
 
-        fs::remove_file(filepath).with_context(|| format!("could not remove file {filepath}"))?;
-
-        fs::create_dir(filepath)
-            .with_context(|| format!("could not create new directory {filepath}"))?;
-
         let new_filename = format!("{filepath}/{name}.crypt", name = pem.name());
-
-        let mut f = File::create(&new_filename)
-            .with_context(|| format!("could not create new encrypted file {new_filename}"))?;
-
-        format::encrypt(pem.public_key(), &unencrypted_file, &mut f, version)
+        let encrypted = Self::encrypted_payload(pem.public_key(), &unencrypted_file, version)
             .with_context(|| format!("could not write to file {new_filename}"))?;
+
+        let temp_plaintext_path = Self::temp_path(filepath, "vault_plaintext")?;
+        fs::rename(filepath, &temp_plaintext_path)
+            .with_context(|| format!("could not move plaintext file {filepath} out of the way"))?;
+
+        let result: Result<()> = (|| {
+            fs::create_dir(filepath)
+                .with_context(|| format!("could not create new directory {filepath}"))?;
+            Self::write_atomic(&new_filename, &encrypted)
+                .with_context(|| format!("could not create new encrypted file {new_filename}"))?;
+            fs::remove_file(&temp_plaintext_path).with_context(|| {
+                format!("could not remove temporary plaintext file {temp_plaintext_path}")
+            })?;
+            Ok(())
+        })();
+
+        if let Err(error) = result {
+            let _ = fs::remove_file(&new_filename);
+            let _ = fs::remove_dir(filepath);
+            let _ = fs::rename(&temp_plaintext_path, filepath);
+            return Err(error);
+        }
 
         Ok(())
     }

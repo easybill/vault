@@ -4,10 +4,9 @@ use std::io::{Read, Write};
 use anyhow::{Context, bail};
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
+use super::crypto::EncryptedFileContent;
 use crate::Result;
 use crate::format::VAULT_MAGIC_BYTE;
-
-use super::crypto::EncryptedFileContent;
 
 const VAULT_BODY_HEADER_SIZE: usize = 8 + 8;
 
@@ -80,5 +79,57 @@ impl<'a> VaultFile<'a> {
             .context("could not write GCM ciphertext")?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::Cursor;
+
+    use byteorder::{BigEndian, WriteBytesExt};
+
+    use super::VaultFile;
+
+    #[test]
+    fn open_body_rejects_truncated_header() {
+        let error = VaultFile::open_body(Cursor::new(vec![0u8; 8])).unwrap_err();
+        assert!(error.to_string().contains("could not read v2 header"));
+    }
+
+    #[test]
+    fn open_body_rejects_oversized_lengths() {
+        let mut bytes = Vec::new();
+        bytes.write_u64::<BigEndian>(50_001).unwrap();
+        bytes.write_u64::<BigEndian>(0).unwrap();
+
+        let error = VaultFile::open_body(Cursor::new(bytes)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("v2 vault file sizes are not supported")
+        );
+    }
+
+    #[test]
+    fn open_body_rejects_truncated_kem_ciphertext() {
+        let mut bytes = Vec::new();
+        bytes.write_u64::<BigEndian>(4).unwrap();
+        bytes.write_u64::<BigEndian>(0).unwrap();
+        bytes.extend_from_slice(&[1, 2, 3]);
+
+        let error = VaultFile::open_body(Cursor::new(bytes)).unwrap_err();
+        assert!(error.to_string().contains("could not read KEM ciphertext"));
+    }
+
+    #[test]
+    fn open_body_rejects_truncated_gcm_ciphertext() {
+        let mut bytes = Vec::new();
+        bytes.write_u64::<BigEndian>(4).unwrap();
+        bytes.write_u64::<BigEndian>(4).unwrap();
+        bytes.extend_from_slice(&[1, 2, 3, 4]);
+        bytes.extend_from_slice(&[5, 6, 7]);
+
+        let error = VaultFile::open_body(Cursor::new(bytes)).unwrap_err();
+        assert!(error.to_string().contains("could not read GCM ciphertext"));
     }
 }

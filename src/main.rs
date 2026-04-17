@@ -14,8 +14,8 @@ use crate::template::Template;
 use crate::ui::question::Question;
 
 mod commands;
-mod format;
 mod filesystem;
+mod format;
 mod key;
 mod rotate_key;
 mod template;
@@ -113,11 +113,7 @@ fn run() -> Result<()> {
         Question::set_yes(yes);
     }
 
-    let format_version = if matches.get_flag("v2") {
-        FormatVersion::V2
-    } else {
-        FormatVersion::V1
-    };
+    let explicit_v2 = matches.get_flag("v2");
 
     if let Some(min_version) = matches.get_one::<String>("expect_version") {
         let version_requirement = VersionReq::parse(min_version).context(
@@ -158,9 +154,13 @@ fn run() -> Result<()> {
             bail!("there is no private key");
         }
 
+        format::validate_private_pems(key_map.private_pems())?;
         println!("keys are fine");
         return Ok(());
     }
+
+    let resolved_format_version =
+        format::resolve_write_version(key_map.private_pems(), explicit_v2)?;
 
     // You can check the value provided by positional arguments, or option arguments
     if let Some(matches) = matches.subcommand_matches("get") {
@@ -231,7 +231,8 @@ fn run() -> Result<()> {
     }
 
     if let Some(_matches) = matches.subcommand_matches("rotate") {
-        rotate_keys(&KeyMapConfig { path_private_key }, format_version).context("rotate keys")?;
+        rotate_keys(&KeyMapConfig { path_private_key }, resolved_format_version)
+            .context("rotate keys")?;
         return Ok(());
     }
 
@@ -239,7 +240,7 @@ fn run() -> Result<()> {
     println!("create key map.");
     println!();
 
-    if scan_for_new_secrets(&key_map, format_version)? > 0 {
+    if scan_for_new_secrets(&key_map, resolved_format_version)? > 0 {
         // refresh the key map
         key_map = KeyMap::from_path(&KeyMapConfig { path_private_key })?;
     }
@@ -257,7 +258,9 @@ fn run() -> Result<()> {
         println!("--    user: {}", open_subscription.username());
         println!("--    name: {}", open_subscription.name());
 
-        if !key_map.could_fulfill_subscription(open_subscription) {
+        if !key_map
+            .could_fulfill_subscription_with_version(open_subscription, resolved_format_version)
+        {
             println!(
                 "no key found to fulfill the subscription, ask someone who has access to this key"
             );
@@ -269,7 +272,7 @@ fn run() -> Result<()> {
         if Question::confirm(
             "   you've the required right to fulfill the subscription, give him access?",
         ) {
-            key_map.fulfill_subscription(open_subscription, format_version)?;
+            key_map.fulfill_subscription(open_subscription, resolved_format_version)?;
         } else {
             println!("maybe later");
         }

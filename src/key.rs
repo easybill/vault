@@ -1,3 +1,5 @@
+use zeroize::Zeroize;
+
 pub mod key_map;
 
 #[derive(Debug)]
@@ -65,5 +67,11 @@ impl PrivateKey {
 
     pub fn name(&self) -> &str {
         self.name.as_str()
+    }
+}
+
+impl Drop for PrivateKey {
+    fn drop(&mut self) {
+        self.data.zeroize();
     }
 }

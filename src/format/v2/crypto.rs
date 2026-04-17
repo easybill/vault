@@ -7,12 +7,12 @@ use ml_kem::pkcs8::{DecodePrivateKey, DecodePublicKey};
 use ml_kem::{DecapsulationKey, EncapsulationKey, MlKem1024};
 use rand::rand_core::UnwrapErr;
 use sha3::Sha3_256;
+use zeroize::Zeroize;
 
+use super::proto::VaultFile;
 use crate::Result;
 use crate::format::UnencryptedVaultFile;
 use crate::key::{Pem, PublicKey};
-
-use super::proto::VaultFile;
 
 const HKDF_INFO: &[u8] = b"vault-v2-aes256gcm";
 
@@ -45,6 +45,7 @@ fn derive_key_material(shared_secret: &[u8]) -> Result<([u8; 32], [u8; 12])> {
     let mut nonce = [0u8; 12];
     aes_key.copy_from_slice(&key_material[..32]);
     nonce.copy_from_slice(&key_material[32..]);
+    key_material.zeroize();
 
     Ok((aes_key, nonce))
 }
@@ -67,7 +68,7 @@ impl Crypto {
             ml_kem::kem::Encapsulate::encapsulate_with_rng(&ek, &mut sys_rng);
 
         let shared_secret_bytes: &[u8] = shared_secret.as_ref();
-        let (aes_key, nonce_bytes) = derive_key_material(shared_secret_bytes)?;
+        let (mut aes_key, mut nonce_bytes) = derive_key_material(shared_secret_bytes)?;
 
         let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
         let nonce = Nonce::from_slice(&nonce_bytes);
@@ -75,6 +76,8 @@ impl Crypto {
         let gcm_ciphertext = cipher
             .encrypt(nonce, unencrypted.content())
             .map_err(|e| anyhow::anyhow!("AES-256-GCM encryption failed: {e}"))?;
+        aes_key.zeroize();
+        nonce_bytes.zeroize();
 
         let ct_bytes: &[u8] = ciphertext.as_ref();
         Ok(EncryptedFileContent {
@@ -101,7 +104,7 @@ impl Crypto {
         let shared_secret = dk.decapsulate(&ciphertext);
 
         let shared_secret_bytes: &[u8] = shared_secret.as_ref();
-        let (aes_key, nonce_bytes) = derive_key_material(shared_secret_bytes)?;
+        let (mut aes_key, mut nonce_bytes) = derive_key_material(shared_secret_bytes)?;
 
         let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
         let nonce = Nonce::from_slice(&nonce_bytes);
@@ -109,6 +112,8 @@ impl Crypto {
         let plaintext = cipher
             .decrypt(nonce, vault_file.gcm_ciphertext())
             .map_err(|e| anyhow::anyhow!("AES-256-GCM decryption failed: {e}"))?;
+        aes_key.zeroize();
+        nonce_bytes.zeroize();
 
         Ok(UnencryptedVaultFile::new(plaintext))
     }
@@ -116,12 +121,15 @@ impl Crypto {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::key::{Pem, PrivateKey, PublicKey};
+    use std::io::Cursor;
+
     use der::pem::LineEnding;
     use ml_kem::kem::Generate;
     use ml_kem::pkcs8::{EncodePrivateKey, EncodePublicKey};
     use ml_kem::{DecapsulationKey, MlKem1024};
+
+    use super::*;
+    use crate::key::{Pem, PrivateKey, PublicKey};
 
     fn generate_pem() -> Pem {
         let mut sys_rng = rand::rngs::SysRng;
@@ -149,6 +157,16 @@ mod test {
         Pem::new(private_key, public_key)
     }
 
+    fn encrypt_to_bytes(pem: &Pem, plaintext: &[u8]) -> Vec<u8> {
+        let unencrypted = UnencryptedVaultFile::new(plaintext.to_vec());
+        let encrypted = Crypto::encrypt(pem.public_key(), &unencrypted).unwrap();
+        let vault_file = super::super::proto::VaultFile::from_encrypted_file_content(&encrypted);
+
+        let mut buffer = Vec::new();
+        vault_file.write(&mut buffer).unwrap();
+        buffer
+    }
+
     #[test]
     fn test_v2_round_trip() {
         let pem = generate_pem();
@@ -173,5 +191,65 @@ mod test {
 
         let decrypted = Crypto::decrypt(&pem, &vault_file).unwrap();
         assert_eq!(decrypted.content(), &[] as &[u8]);
+    }
+
+    #[test]
+    fn test_v2_decrypt_with_wrong_private_key_fails() {
+        let sender = generate_pem();
+        let wrong_recipient = generate_pem();
+        let bytes = encrypt_to_bytes(&sender, b"hello");
+
+        let error = crate::format::decrypt(&wrong_recipient, Cursor::new(bytes)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("could not decrypt v2 vault file")
+        );
+    }
+
+    #[test]
+    fn test_v2_tampered_kem_ciphertext_fails() {
+        let pem = generate_pem();
+        let mut bytes = encrypt_to_bytes(&pem, b"hello");
+        bytes[20] ^= 0x01;
+
+        assert!(crate::format::decrypt(&pem, Cursor::new(bytes)).is_err());
+    }
+
+    #[test]
+    fn test_v2_tampered_gcm_ciphertext_fails() {
+        let pem = generate_pem();
+        let mut bytes = encrypt_to_bytes(&pem, b"hello");
+        let last = bytes.len() - 1;
+        bytes[last] ^= 0x01;
+
+        assert!(crate::format::decrypt(&pem, Cursor::new(bytes)).is_err());
+    }
+
+    #[test]
+    fn test_v2_same_plaintext_encrypts_differently() {
+        let pem = generate_pem();
+        let first = Crypto::encrypt(
+            pem.public_key(),
+            &UnencryptedVaultFile::new(b"repeatable".to_vec()),
+        )
+        .unwrap();
+        let second = Crypto::encrypt(
+            pem.public_key(),
+            &UnencryptedVaultFile::new(b"repeatable".to_vec()),
+        )
+        .unwrap();
+
+        assert_ne!(first.kem_ciphertext(), second.kem_ciphertext());
+        assert_ne!(first.gcm_ciphertext(), second.gcm_ciphertext());
+    }
+
+    #[test]
+    fn test_v2_invalid_kem_ciphertext_length_fails() {
+        let pem = generate_pem();
+        let mut bytes = encrypt_to_bytes(&pem, b"hello");
+        bytes.truncate(20 + 1567);
+
+        assert!(crate::format::decrypt(&pem, Cursor::new(bytes)).is_err());
     }
 }

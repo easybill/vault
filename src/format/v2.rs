@@ -12,8 +12,7 @@ pub mod keys;
 pub(crate) mod proto;
 
 pub fn decrypt(pem: &Pem, reader: impl Read) -> Result<UnencryptedVaultFile> {
-    let vault_file =
-        proto::VaultFile::open_body(reader).context("could not read v2 vault file")?;
+    let vault_file = proto::VaultFile::open_body(reader).context("could not read v2 vault file")?;
     crypto::Crypto::decrypt(pem, &vault_file).context("could not decrypt v2 vault file")
 }
 

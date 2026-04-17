@@ -2,7 +2,7 @@
 
 use predicates::prelude::*;
 
-use self::common::TestVault;
+use self::common::{TestVault, create_fake_gpg_dir, wrap_v2_private_key_with_gpg};
 
 mod common;
 
@@ -116,4 +116,45 @@ fn secret_with_binary_content() {
 
     assert!(output.status.success());
     assert_eq!(output.stdout, binary_content);
+}
+
+#[test]
+fn v2_secret_decryption() {
+    let vault = TestVault::builder()
+        .with_v2()
+        .with_secret("MY_SECRET", "MY_SECRET_CONTENT")
+        .build();
+
+    vault
+        .command()
+        .args(["get", "MY_SECRET"])
+        .assert()
+        .success()
+        .stdout("MY_SECRET_CONTENT");
+}
+
+#[test]
+fn v2_secret_decryption_with_gpg_wrapped_private_key() {
+    let vault = TestVault::builder()
+        .with_v2()
+        .with_secret("MY_SECRET", "MY_SECRET_CONTENT")
+        .build();
+    let fake_gpg_dir = create_fake_gpg_dir();
+
+    wrap_v2_private_key_with_gpg(vault.path(), "testuser");
+
+    vault
+        .command()
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                fake_gpg_dir.path().display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
+        .args(["get", "MY_SECRET"])
+        .assert()
+        .success()
+        .stdout("MY_SECRET_CONTENT");
 }

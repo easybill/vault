@@ -1,13 +1,28 @@
+use std::fs;
+use std::fs::File;
+use std::io::Write;
+
 use anyhow::{Context, Result, bail};
 use der::pem::LineEnding;
 use ml_kem::kem::Generate;
 use ml_kem::pkcs8::{EncodePrivateKey, EncodePublicKey};
 use ml_kem::{DecapsulationKey, MlKem1024};
-use std::fs;
-use std::fs::File;
-use std::io::Write;
 
 use crate::key::Pem;
+
+#[cfg(unix)]
+fn set_owner_only_permissions(path: &str) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let permissions = fs::Permissions::from_mode(0o600);
+    fs::set_permissions(path, permissions)
+        .with_context(|| format!("could not set owner-only permissions on {path}"))
+}
+
+#[cfg(not(unix))]
+fn set_owner_only_permissions(_path: &str) -> Result<()> {
+    Ok(())
+}
 
 pub fn create_keys(username: &str) -> Result<Pem> {
     let private_key_path = format!("./.vault/private_keys/{username}.v2.pem");
@@ -76,6 +91,7 @@ pub fn create_keys(username: &str) -> Result<Pem> {
             .with_context(|| format!("could not create {private_key_path}"))?;
         f.write_all(private_pem.as_bytes())
             .with_context(|| format!("could not write to {private_key_path}"))?;
+        set_owner_only_permissions(&private_key_path)?;
     }
 
     Ok(Pem::new(

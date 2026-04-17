@@ -3,11 +3,10 @@ use openssl::rand::{rand_bytes, rand_priv_bytes};
 use openssl::rsa::{Padding, Rsa};
 use openssl::symm::{Cipher, decrypt, encrypt};
 
+use super::proto::VaultFile;
 use crate::Result;
 use crate::format::UnencryptedVaultFile;
 use crate::key::{Pem, PrivateKey, PublicKey};
-
-use super::proto::VaultFile;
 
 const KEY_SIZE: usize = 256 / 8;
 const IV_SIZE: usize = 128 / 8;

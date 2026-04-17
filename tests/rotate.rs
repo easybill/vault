@@ -106,3 +106,48 @@ fn with_multiple_secrets() {
         .success()
         .stdout("CONTENT_B");
 }
+
+#[test]
+fn preserves_access_for_v2_rotation() {
+    let vault = TestVault::builder()
+        .with_v2()
+        .with_secret("MY_SECRET", "MY_CONTENT")
+        .build();
+
+    vault.command().args(["--v2", "rotate"]).assert().success();
+
+    clean_backup_files(vault.path());
+
+    vault
+        .command()
+        .args(["get", "MY_SECRET"])
+        .assert()
+        .success()
+        .stdout("MY_CONTENT");
+}
+
+#[test]
+fn old_v2_encrypted_files_are_not_read_after_rotation() {
+    let vault = TestVault::builder()
+        .with_v2()
+        .with_secret("MY_SECRET", "MY_CONTENT")
+        .build();
+
+    let crypt_path = vault.path().join(format!(
+        ".vault/secrets/MY_SECRET/{}.crypt",
+        vault.username()
+    ));
+    let original_crypt = fs::read(&crypt_path).unwrap();
+
+    vault.command().args(["--v2", "rotate"]).assert().success();
+
+    fs::remove_dir_all(vault.path().join(".vault/secrets")).unwrap();
+    fs::create_dir_all(vault.path().join(".vault/secrets/MY_SECRET")).unwrap();
+    fs::write(&crypt_path, &original_crypt).unwrap();
+
+    vault
+        .command()
+        .args(["get", "MY_SECRET"])
+        .assert()
+        .failure();
+}

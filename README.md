@@ -191,11 +191,11 @@ Currently, the size is limited, this can be relaxed later if necessary.
 
 # PGP / GPG + Smart Cards
 
-Vault supports pgp encrypted private keys.
-If vault comes across such a private key which has .pgp as file extension, vault tries to decrypt it using:
+Vault supports pgp encrypted private keys for both v1 (`.pem.pgp`) and v2 (`.v2.pem.pgp`).
+If vault comes across such a private key which has `.pgp` as file extension, vault tries to decrypt it using:
 
 ```sh
-gpg --decrypt ./.vault/private_keys/[username].pem.pgp`.
+gpg --decrypt ./.vault/private_keys/[username].pem.pgp
 ```
 
 Authentication with a yubikey could then take place here, for example. The secrets themselves are not encrypted via gpg,
@@ -206,12 +206,17 @@ Example:
 ```sh
 # without pgp:
 ./.vault/private_keys/[username].pem
+./.vault/private_keys/[username].v2.pem
 
 # with pgp:
 ./.vault/private_keys/[username].pem.pgp
+./.vault/private_keys/[username].v2.pem.pgp
 
 # list your keys:
 gpg --list-keys
 
 gpg --trust-model always --encrypt --recipient "[YOUR_KEY]" -o ./.vault/private_keys/[USERNAME].pem.pgp ./.vault/private_keys/USERNAME.pem
 ```
+
+For rotated v2 keys, backup files stay on disk for manual recovery, but vault does not autoload `_backup_` private keys
+during normal decryption.
