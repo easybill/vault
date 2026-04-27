@@ -1,7 +1,7 @@
 use std::fs;
 
 use anyhow::{Context, Result, bail};
-use clap::Arg;
+use clap::{Arg, ArgAction};
 use openssl::rsa::Rsa;
 use self_update::cargo_crate_version;
 use semver::{Version, VersionReq};
@@ -35,6 +35,8 @@ fn run() -> Result<()> {
         .arg(
             Arg::new("yes")
                 .short('y')
+                .long("yes")
+                .action(ArgAction::SetTrue)
                 .help("always answers questions with yes")
         )
         .arg(
@@ -96,8 +98,8 @@ fn run() -> Result<()> {
         )
         .get_matches();
 
-    if let Some(yes) = matches.get_one::<bool>("yes").copied() {
-        Question::set_yes(yes);
+    if matches.get_flag("yes") {
+        Question::set_yes(true);
     }
 
     if let Some(min_version) = matches.get_one::<String>("expect_version") {
