@@ -6,12 +6,11 @@ edition = "2024"
 
 [dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
-ml-kem = { version = "=0.3.0-rc.2", features = ["pkcs8", "pem", "alloc", "zeroize"] }
+ml-kem = { version = "0.3", features = ["pkcs8", "pem", "alloc", "zeroize"] }
 rand = "0.10"
 der = { version = "0.8", features = ["pem"] }
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 hkdf = "0.13"
-sha3 = "0.11"
 zeroize = "1"
 toml = "1"
 serde_derive = "1"
@@ -25,6 +24,7 @@ dirs = "6"
 globset = "0.4"
 self_update = "0.44"
 semver = "1"
+sha3 = "0.12"
 
 [dev-dependencies]
 assert_cmd = "2"

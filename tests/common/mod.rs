@@ -10,11 +10,11 @@ use std::io::Write;
 use std::path::Path;
 
 use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Key, Nonce};
+use aes_gcm::Aes256Gcm;
 use assert_cmd::Command;
 use byteorder::{BigEndian, WriteBytesExt};
 use der::pem::LineEnding;
-use hkdf::Hkdf;
+use hkdf::SimpleHkdf;
 use ml_kem::kem::{Encapsulate, Generate};
 use ml_kem::pkcs8::{DecodePublicKey, EncodePrivateKey, EncodePublicKey};
 use ml_kem::{DecapsulationKey, EncapsulationKey, MlKem1024};
@@ -244,7 +244,7 @@ fn create_v2_keys(base_path: &Path, username: &str) -> Vec<u8> {
 }
 
 fn derive_v2_key_material(shared_secret: &[u8]) -> ([u8; 32], [u8; 12]) {
-    let hkdf = Hkdf::<Sha3_256>::new(None, shared_secret);
+    let hkdf = SimpleHkdf::<Sha3_256>::new(None, shared_secret);
     let mut key_material = [0u8; KEY_MATERIAL_SIZE];
     hkdf.expand(HKDF_INFO, &mut key_material)
         .expect("Failed to derive V2 key material");
@@ -336,8 +336,8 @@ fn create_encrypted_secret_v2(
     let ciphertext_bytes: &[u8] = ciphertext.as_ref();
     let (aes_key, nonce_bytes) = derive_v2_key_material(shared_secret.as_ref());
 
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let cipher = Aes256Gcm::new((&aes_key).into());
+    let nonce = (&nonce_bytes).into();
     let gcm_ciphertext = cipher
         .encrypt(nonce, content)
         .expect("Failed to encrypt V2 content");

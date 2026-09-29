@@ -1,7 +1,7 @@
+use aes_gcm::Aes256Gcm;
 use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Key, Nonce};
 use anyhow::Context;
-use hkdf::Hkdf;
+use hkdf::SimpleHkdf;
 use ml_kem::kem::Decapsulate;
 use ml_kem::pkcs8::{DecodePrivateKey, DecodePublicKey};
 use ml_kem::{DecapsulationKey, EncapsulationKey, MlKem1024};
@@ -36,7 +36,7 @@ impl EncryptedFileContent {
 }
 
 fn derive_key_material(shared_secret: &[u8]) -> Result<([u8; 32], [u8; 12])> {
-    let hkdf = Hkdf::<Sha3_256>::new(None, shared_secret);
+    let hkdf = SimpleHkdf::<Sha3_256>::new(None, shared_secret);
     let mut key_material = [0u8; KEY_MATERIAL_SIZE];
     hkdf.expand(HKDF_INFO, &mut key_material)
         .map_err(|_| anyhow::anyhow!("HKDF expand failed"))?;
@@ -70,8 +70,8 @@ impl Crypto {
         let shared_secret_bytes: &[u8] = shared_secret.as_ref();
         let (mut aes_key, mut nonce_bytes) = derive_key_material(shared_secret_bytes)?;
 
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let cipher = Aes256Gcm::new((&aes_key).into());
+        let nonce = (&nonce_bytes).into();
 
         let gcm_ciphertext = cipher
             .encrypt(nonce, unencrypted.content())
@@ -106,8 +106,8 @@ impl Crypto {
         let shared_secret_bytes: &[u8] = shared_secret.as_ref();
         let (mut aes_key, mut nonce_bytes) = derive_key_material(shared_secret_bytes)?;
 
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let cipher = Aes256Gcm::new((&aes_key).into());
+        let nonce = (&nonce_bytes).into();
 
         let plaintext = cipher
             .decrypt(nonce, vault_file.gcm_ciphertext())
