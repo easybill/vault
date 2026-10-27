@@ -101,7 +101,7 @@ impl Crypto {
 
     pub fn key_encrypt(public_key: &PublicKey, key: &[u8; KEY_SIZE]) -> Result<Vec<u8>> {
         let rsa = openssl::rsa::Rsa::public_key_from_pem(public_key.data())
-            .with_context(|| format!("invalid public key {}", &public_key.name()))?;
+            .with_context(|| format!("invalid public key {}", public_key.name()))?;
 
         // Since this is a low level function, we can only encrypt data that is less than the
         // size of a signature minus the identifier marker of the padding (11 for PKCS1).
@@ -122,7 +122,7 @@ impl Crypto {
 
     pub fn key_decrypt(private_key: &PrivateKey, encrypted_key: &[u8]) -> Result<Vec<u8>> {
         let rsa = Rsa::private_key_from_pem(private_key.data())
-            .with_context(|| format!("invalid private key {}", &private_key.name()))?;
+            .with_context(|| format!("invalid private key {}", private_key.name()))?;
 
         // The maximal encrypted data can only be the size of the signature minus the identifier
         // marker of the padding (11 for PKCS1). The OpenSSL Rust crate currently doesn't properly

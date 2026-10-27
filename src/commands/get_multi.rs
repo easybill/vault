@@ -65,14 +65,14 @@ pub fn get_multi(input: &str, key_map: &KeyMap) -> Result<()> {
                     Err(error) => {
                         errors.push(format!(
                             "could decode key {}. maybe it's not valid utf8?, error: {}",
-                            &secret_key.secret, error
+                            secret_key.secret, error
                         ));
                     }
                 };
             }
             Err(error) => errors.push(format!(
                 "could not decrypt key {}, error: {}",
-                &secret_key.secret, error
+                secret_key.secret, error
             )),
         };
     }
@@ -94,7 +94,7 @@ pub fn get_multi(input: &str, key_map: &KeyMap) -> Result<()> {
             Err(error) => {
                 errors.push(format!(
                     "could decode template {}. error: {}",
-                    &template.template, error
+                    template.template, error
                 ));
             }
         };

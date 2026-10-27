@@ -160,7 +160,7 @@ impl KeyMap {
         {
             let secret_path = format!(
                 "./.vault/secrets/{subscription}/{username}.crypt",
-                subscription = &raw_subscription,
+                subscription = raw_subscription,
                 username = username
             );
 
@@ -193,7 +193,7 @@ impl KeyMap {
         lookup_paths.push(fs::read_dir(&config.path_private_key).with_context(|| {
             format!(
                 "private key directory {path} is not readable",
-                path = &config.path_private_key
+                path = config.path_private_key
             )
         })?);
 
@@ -315,7 +315,7 @@ impl KeyMap {
             let decoded_config_file: ConfigToml = toml::from_str(&raw_config).map_err(|_| {
                 anyhow!(
                     "could not parse toml file {file}",
-                    file = &config_file_path.display()
+                    file = config_file_path.display()
                 )
             })?;
 

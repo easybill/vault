@@ -103,16 +103,16 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
         if fs::metadata(&rename.to).is_ok() {
             return Err(anyhow!(
                 "could not copy from {from} to {to}, file/dir already exists",
-                from = &rename.from,
-                to = &rename.to
+                from = rename.from,
+                to = rename.to
             ));
         }
 
         fs::rename(&rename.from, &rename.to).map_err(|error| {
             anyhow!(
                 "could not copy from {from} to {to}, error: {error}",
-                from = &rename.from,
-                to = &rename.to,
+                from = rename.from,
+                to = rename.to,
             )
         })?;
     }
