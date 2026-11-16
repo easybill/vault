@@ -120,7 +120,6 @@ fn batch_each_adds_only_accepted_secrets() {
         .stdout("a");
 }
 
-
 #[test]
 fn batch_adds_all_secrets() {
     let vault = TestVault::builder().build();
@@ -156,7 +155,6 @@ fn batch_adds_all_secrets() {
             .join(format!("{}.crypt", vault.username()))
             .is_file()
     );
-
 
     // A decrypts back to its original content
     vault
