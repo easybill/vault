@@ -1,6 +1,6 @@
 [package]
 name = "vault"
-version = "1.0.30"
+version = "1.0.31"
 authors = ["Plattform Team <server@easybill.de>"]
 edition = "2024"
 
