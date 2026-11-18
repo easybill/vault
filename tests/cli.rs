@@ -1,4 +1,6 @@
 //! Tests for CLI flags and general vault behavior.
+use std::fs;
+use std::time::Duration;
 
 use predicates::prelude::*;
 
@@ -76,4 +78,97 @@ fn fails_without_vault_directory() {
         .args(["check-keys"])
         .assert()
         .failure();
+}
+
+#[test]
+fn batch_each_adds_only_accepted_secrets() {
+    let vault = TestVault::builder().build();
+    fs::write(vault.path().join(".vault/secrets/A"), "a").unwrap();
+    fs::write(vault.path().join(".vault/secrets/B"), "b").unwrap();
+
+    vault
+        .command()
+        .env_remove("VAULT_FORCE_YES")
+        .write_stdin("c\ny\nn\n") // case by case → yes to A, no to B (paths are sorted)
+        .timeout(Duration::from_secs(10))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("new secrets (2):"))
+        .stderr(predicate::str::contains("unexpected char").not());
+
+    let secrets = vault.path().join(".vault/secrets");
+
+    // A was encrypted: the plaintext file is replaced by a directory with <user>.crypt
+    assert!(secrets.join("A").is_dir());
+    assert!(
+        secrets
+            .join("A")
+            .join(format!("{}.crypt", vault.username()))
+            .is_file()
+    );
+
+    // B was declined: still a plaintext file
+    assert!(secrets.join("B").is_file());
+    assert_eq!(fs::read_to_string(secrets.join("B")).unwrap(), "b");
+
+    // A decrypts back to its original content
+    vault
+        .command()
+        .args(["get", "A"])
+        .assert()
+        .success()
+        .stdout("a");
+}
+
+#[test]
+fn batch_adds_all_secrets() {
+    let vault = TestVault::builder().build();
+    fs::write(vault.path().join(".vault/secrets/A"), "a").unwrap();
+    fs::write(vault.path().join(".vault/secrets/B"), "b").unwrap();
+
+    vault
+        .command()
+        .env_remove("VAULT_FORCE_YES")
+        .write_stdin("y\n") // yes to all
+        .timeout(Duration::from_secs(10))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("new secrets (2):"))
+        .stderr(predicate::str::contains("unexpected char").not());
+
+    let secrets = vault.path().join(".vault/secrets");
+
+    // A was encrypted: the plaintext file is replaced by a directory with <user>.crypt
+    assert!(secrets.join("A").is_dir());
+    assert!(
+        secrets
+            .join("A")
+            .join(format!("{}.crypt", vault.username()))
+            .is_file()
+    );
+
+    // B was encrypted: the plaintext file is replaced by a directory with <user>.crypt
+    assert!(secrets.join("B").is_dir());
+    assert!(
+        secrets
+            .join("B")
+            .join(format!("{}.crypt", vault.username()))
+            .is_file()
+    );
+
+    // A decrypts back to its original content
+    vault
+        .command()
+        .args(["get", "A"])
+        .assert()
+        .success()
+        .stdout("a");
+
+    // B decrypts back to its original content
+    vault
+        .command()
+        .args(["get", "B"])
+        .assert()
+        .success()
+        .stdout("b");
 }

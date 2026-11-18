@@ -222,30 +222,40 @@ fn run() -> Result<()> {
     }
 
     // check if there are any subscriptions that we can fulfill
-    for open_subscription in &key_map.open_subscriptions() {
-        println!();
-        println!("-- Open Subscription");
-        println!("--    user: {}", open_subscription.username());
-        println!("--    name: {}", open_subscription.name());
-
-        if !key_map.could_fulfill_subscription(open_subscription) {
-            println!(
-                "no key found to fulfill the subscription, ask someone who has access to this key"
-            );
-            continue;
-        }
-
-        println!();
-
-        if Question::confirm(
-            "   you've the required right to fulfill the subscription, give him access?",
-        ) {
-            key_map.fulfill_subscription(open_subscription)?;
+    let mut fulfillable = Vec::new();
+    let mut unfulfillable = Vec::new();
+    for open_subscription in key_map.open_subscriptions() {
+        if key_map.could_fulfill_subscription(&open_subscription) {
+            fulfillable.push(open_subscription);
         } else {
-            println!("maybe later");
+            unfulfillable.push(open_subscription);
         }
+    }
 
+    if !unfulfillable.is_empty() {
         println!();
+        println!(
+            "open subscriptions without a key to fulfill them, ask someone who has access ({}):",
+            unfulfillable.len()
+        );
+        for subscription in &unfulfillable {
+            println!(
+                "  - user: {}, name: {}",
+                subscription.username(),
+                subscription.name()
+            );
+        }
+    }
+
+    fulfillable.sort_by(|a, b| (a.username(), a.name()).cmp(&(b.username(), b.name())));
+    let accepted = Question::select(
+        "open subscriptions you've the required right to fulfill",
+        fulfillable,
+        |s| format!("user: {}, name: {}", s.username(), s.name()),
+        |s| format!("   give {} access to {}?", s.username(), s.name()),
+    );
+    for subscription in &accepted {
+        key_map.fulfill_subscription(subscription)?;
     }
 
     println!();
@@ -275,6 +285,8 @@ pub fn scan_for_new_secrets(key_map: &KeyMap) -> Result<usize> {
         format!("could not read subscription path. could the directory be missing? {secret_path}")
     })?;
 
+    let mut new_secret_paths = Vec::new();
+
     for raw_path in paths {
         let path = raw_path.context("could not parse path")?;
 
@@ -286,16 +298,19 @@ pub fn scan_for_new_secrets(key_map: &KeyMap) -> Result<usize> {
             continue;
         }
 
-        let path_as_string = path.path().display().to_string();
+        new_secret_paths.push(path.path().display().to_string());
+    }
 
-        if !Question::confirm(&format!(
-            "do you want to add the new secret at {path_as_string}?"
-        )) {
-            continue;
-        }
+    new_secret_paths.sort();
+    let accepted = Question::select(
+        "new secrets",
+        new_secret_paths,
+        |path| path.clone(),
+        |path| format!("do you want to add the new secret at {path}?"),
+    );
 
-        key_map.add_new_secret(&path_as_string)?;
-
+    for path in &accepted {
+        key_map.add_new_secret(path)?;
         new_secrets_created += 1;
     }
 
