@@ -3,7 +3,6 @@ use std::fs;
 use anyhow::{Context, Result, bail};
 use clap::Arg;
 use openssl::rsa::Rsa;
-use self_update::cargo_crate_version;
 use semver::{Version, VersionReq};
 
 use crate::commands::get_multi::get_multi;
@@ -43,7 +42,7 @@ fn run() -> Result<()> {
                 .required(false)
                 .help("are you using a feature that only exists in a new vault version and your coworkers are still using an old version? install --min-version to warn your coworkers =)"),
         )
-        .version(cargo_crate_version!())
+        .version(env!("CARGO_PKG_VERSION"))
         .subcommand(
             clap::Command::new("get").arg(
                 Arg::new("key")
@@ -65,16 +64,6 @@ fn run() -> Result<()> {
                 .arg(
                     Arg::new("username")
                         .required(true)
-                        .help("lists test values"),
-                ),
-        )
-        .subcommand(
-            clap::Command::new("update")
-                .about("updates vault")
-                .arg(
-                    Arg::new("current_version")
-                        .default_value(cargo_crate_version!())
-                        .required(false)
                         .help("lists test values"),
                 ),
         )
@@ -104,12 +93,12 @@ fn run() -> Result<()> {
         let version_requirement = VersionReq::parse(min_version).context(
             "could not parse version requirement, expected something like >=1.2.3, <1.8.0",
         )?;
-        let version_current = Version::parse(cargo_crate_version!())
+        let version_current = Version::parse(env!("CARGO_PKG_VERSION"))
             .context("could not parse current version, should not happen")?;
 
         if !version_requirement.matches(&version_current) {
             bail!(
-                "probably a coworker wants to prevent this vault version from being used. maybe there was a bug in vault or a feature is being used that is only available in this version. may you want to run vault update to upgrade to the latest version."
+                "probably a coworker wants to prevent this vault version from being used. maybe there was a bug in vault or a feature is being used that is only available in this version. please install the latest version from https://github.com/easybill/vault/releases."
             );
         }
     }
@@ -171,23 +160,6 @@ fn run() -> Result<()> {
         let value = template.parse_from_file(filename)?;
         print!("{value}");
 
-        return Ok(());
-    }
-
-    if let Some(matches) = matches.subcommand_matches("update") {
-        let status = self_update::backends::github::Update::configure()
-            .repo_owner("easybill")
-            .repo_name("vault")
-            .bin_name("vault")
-            .show_download_progress(true)
-            .current_version(
-                matches
-                    .get_one::<String>("current_version")
-                    .expect("current version has a default"),
-            )
-            .build()?
-            .update()?;
-        println!("Update status: `{}`!", status.version());
         return Ok(());
     }
 

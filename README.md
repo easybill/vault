@@ -103,8 +103,8 @@ Example:
 vault --expect_version='>=1.2.3, <1.8.0' get foo
 ```
 
-If the version requirement does not match with your vault version, you'll get an error prompt and help, how to update
-vault.
+If the version requirement does not match with your vault version, vault exits with an error. Install the latest
+version from the [releases page](https://github.com/easybill/vault/releases) to resolve it.
 
 ### Rotate your own key
 
