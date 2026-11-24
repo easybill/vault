@@ -1,36 +1,56 @@
-use std::borrow::Cow;
 use std::io::{Read, Write};
 
 use anyhow::{Context, bail};
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
 use crate::Result;
-use crate::crypto::EncryptedFileContent;
+use crate::policy;
+
+#[derive(Clone)]
+pub struct UnencryptedVaultFile {
+    content: Vec<u8>,
+}
+
+impl UnencryptedVaultFile {
+    pub fn new(content: Vec<u8>) -> Self {
+        UnencryptedVaultFile { content }
+    }
+
+    pub fn content(&self) -> &[u8] {
+        self.content.as_slice()
+    }
+}
 
 #[derive(Debug)]
-pub struct VaultFile<'a> {
-    keyfile_content: Cow<'a, [u8]>,
-    secret_content: Cow<'a, [u8]>,
+pub struct VaultFile {
+    version: u16,
+    keyfile_content: Vec<u8>,
+    secret_content: Vec<u8>,
 }
 
 const VAULT_MAGIC_BYTE: u16 = 4242;
 
 const VAULT_HEADER_SIZE: usize = 2 + 2 + 8 + 8;
 
-impl<'a> VaultFile<'a> {
+impl VaultFile {
+    pub fn new(version: u16, keyfile_content: Vec<u8>, secret_content: Vec<u8>) -> Self {
+        VaultFile {
+            version,
+            keyfile_content,
+            secret_content,
+        }
+    }
+
+    pub fn version(&self) -> u16 {
+        self.version
+    }
+
     pub fn keyfile_content(&self) -> &[u8] {
-        self.keyfile_content.as_ref()
+        self.keyfile_content.as_slice()
     }
 
     pub fn secret_content(&self) -> &[u8] {
-        self.secret_content.as_ref()
-    }
-
-    pub fn from_encrypted_file_content(file_content: &'a EncryptedFileContent) -> Self {
-        VaultFile {
-            keyfile_content: Cow::Borrowed(file_content.encrypted_key()),
-            secret_content: Cow::Borrowed(file_content.encrypted_content()),
-        }
+        self.secret_content.as_slice()
     }
 
     pub fn open(mut content: impl Read) -> Result<Self> {
@@ -48,7 +68,7 @@ impl<'a> VaultFile<'a> {
 
         let version = BigEndian::read_u16(&header_buffer[2..4]);
 
-        if version != 1 {
+        if policy::by_file_version(version).is_none() {
             bail!("only version is supported, found {version}");
         }
 
@@ -71,15 +91,16 @@ impl<'a> VaultFile<'a> {
             .context("could not read secret contents")?;
 
         Ok(VaultFile {
-            keyfile_content: Cow::Owned(keyfile_content),
-            secret_content: Cow::Owned(secret_content),
+            version,
+            keyfile_content,
+            secret_content,
         })
     }
 
     pub fn write(&self, mut to: impl Write) -> Result<()> {
         to.write_u16::<BigEndian>(VAULT_MAGIC_BYTE)
             .context("could not write magic byte")?;
-        to.write_u16::<BigEndian>(1)
+        to.write_u16::<BigEndian>(self.version)
             .context("could not write version")?;
         to.write_u64::<BigEndian>(self.keyfile_content.len() as u64)
             .context("could not write keyfile")?;

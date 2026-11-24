@@ -3,19 +3,23 @@ use std::time::SystemTime;
 
 use anyhow::{Context, anyhow, bail};
 
-use crate::key::key_map::{KeyMap, KeyMapConfig, Subscription};
+use crate::Result;
+use crate::key::key_map::{KeyMap, Subscription};
+use crate::policy::{self, Policy, Rename};
 use crate::ui::question::Question;
-use crate::{Result, create_keys};
 
-pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
-    let key_map = KeyMap::from_path(key_map_config)?;
+pub fn rotate_keys() -> Result<()> {
+    let key_map = KeyMap::from_path()?;
 
     let pems = key_map
         .private_pems()
         .iter()
-        .filter(|x| !x.name().contains("_backup_"))
+        .filter(|x| x.policy().is_rotatable(x))
         .collect::<Vec<_>>();
     let pem = pems.first().unwrap(); // todo, based on filename
+
+    let source_policy = pem.policy();
+    let target_policy = policy::current();
 
     if !Question::confirm(&format!(
         "do you want to rotate your private key {:?}?",
@@ -28,48 +32,25 @@ pub fn rotate_keys(key_map_config: &KeyMapConfig) -> Result<()> {
     let username_rotated = &format!("{username_current}_to_rotate");
 
     println!("1. generate new key");
-    create_keys(&format!("{username_current}_to_rotate")).context("create_keys")?;
+    target_policy
+        .create_key(username_rotated)
+        .context("create_keys")?;
 
-    let keymap = KeyMap::from_path(key_map_config)?;
+    let keymap = KeyMap::from_path()?;
 
     println!("2. allow access to all keys");
     allow_access_to_all_keys(&keymap, username_rotated).context("allow_access_to_all_keys")?;
     println!("2. delete the old key");
-    delete_user(username_current).context("delete_user")?;
+    delete_user(source_policy, username_current).context("delete_user")?;
     println!("3. rename user");
-    rename_user(username_rotated, username_current).context("rename_user")?;
+    rename_user(target_policy, username_rotated, username_current).context("rename_user")?;
     println!("the key has been rotated, the old key is still there and has a backup suffix.");
 
     Ok(())
 }
 
-fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
-    struct Rename {
-        from: String,
-        to: String,
-    }
-
-    let mut renames = vec![];
-
-    renames.push(Rename {
-        from: format!("./.vault/private_keys/{username_from}.pem"),
-        to: format!("./.vault/private_keys/{username_to}.pem"),
-    });
-
-    renames.push(Rename {
-        from: format!("./.vault/private_keys/{username_from}.pub.pem"),
-        to: format!("./.vault/private_keys/{username_to}.pub.pem"),
-    });
-
-    renames.push(Rename {
-        from: format!("./.vault/keys/{username_from}"),
-        to: format!("./.vault/keys/{username_to}"),
-    });
-
-    renames.push(Rename {
-        from: format!("./.vault/keys/{username_to}/{username_from}.pub.pem"),
-        to: format!("./.vault/keys/{username_to}/{username_to}.pub.pem"),
-    });
+fn rename_user(target_policy: &dyn Policy, username_from: &str, username_to: &str) -> Result<()> {
+    let mut renames = target_policy.key_renames(username_from, username_to);
 
     let secret_directory_path = "./.vault/secrets/";
 
@@ -120,7 +101,7 @@ fn rename_user(username_from: &str, username_to: &str) -> Result<()> {
     Ok(())
 }
 
-fn delete_user(username: &str) -> Result<()> {
+fn delete_user(source_policy: &dyn Policy, username: &str) -> Result<()> {
     // delete all secrets
 
     let secret_directory_path = "./.vault/secrets/";
@@ -186,14 +167,7 @@ fn delete_user(username: &str) -> Result<()> {
         Err(_) => bail!("SystemTime before UNIX_EPOCH"),
     };
 
-    let _ = fs::rename(
-        format!("./.vault/private_keys/{username}.pem"),
-        format!("./.vault/private_keys/{username}_backup_{timestamp}.pem"),
-    );
-    let _ = fs::rename(
-        format!("./.vault/private_keys/{username}.pub.pem"),
-        format!("./.vault/private_keys/{username}_backup_{timestamp}.pub.pem"),
-    );
+    source_policy.backup_private_key(username, timestamp);
 
     Ok(())
 }
