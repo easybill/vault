@@ -8,9 +8,9 @@ use crate::key::key_map::{KeyMap, Subscription};
 use crate::policy::{Policy, Rename};
 use crate::ui::question::Question;
 
-/// Rotates the first active key ([`KeyMap::active_pems`]) into a new key of its own policy. With
-/// a `migrate_to` policy, the first active key of an older policy is rotated into a new key of
-/// `migrate_to` instead.
+/// Rotates the first active key ([`KeyMap::active_pems`], keys of the newest policy first) into a
+/// new key of its own policy. With a `migrate_to` policy, the first active key of an older policy
+/// in loading order is rotated into a new key of `migrate_to` instead.
 pub fn rotate_keys(migrate_to: Option<&'static dyn Policy>) -> Result<()> {
     let key_map = KeyMap::from_path()?;
 

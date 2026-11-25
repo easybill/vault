@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::Read;
@@ -391,16 +392,25 @@ impl KeyMap {
         &self.pems
     }
 
-    /// The loaded keys that encrypt new secrets and can be rotated, in loading order: the active
-    /// keys that are not superseded. A key is superseded when the repository registers a key of
-    /// a newer policy for the user of the same name, it then only decrypts.
+    /// The loaded keys that encrypt new secrets and can be rotated: the active keys that are not
+    /// superseded, keys of a newer policy first, in loading order within a policy. A key is
+    /// superseded when the repository registers a key of a newer policy for the user of the same
+    /// name, it then only decrypts.
     pub fn active_pems(&self) -> impl Iterator<Item = &Pem> {
-        self.pems.iter().filter(|pem| {
-            pem.is_active()
-                && self
-                    .registered_file_version(pem.name())
-                    .is_none_or(|version| version <= pem.policy().file_version())
-        })
+        let mut pems: Vec<&Pem> = self
+            .pems
+            .iter()
+            .filter(|pem| {
+                pem.is_active()
+                    && self
+                        .registered_file_version(pem.name())
+                        .is_none_or(|version| version <= pem.policy().file_version())
+            })
+            .collect();
+
+        // A stable sort keeps the loading order within a policy.
+        pems.sort_by_key(|pem| Reverse(pem.policy().file_version()));
+        pems.into_iter()
     }
 
     /// The highest file version of the public keys registered for `user`, `None` without one.
