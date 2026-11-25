@@ -5,27 +5,44 @@ use anyhow::{Context, anyhow, bail, ensure};
 
 use crate::Result;
 use crate::key::key_map::{KeyMap, Subscription};
-use crate::policy::{Policy, Rename, Version1};
+use crate::policy::{Policy, Rename};
 use crate::ui::question::Question;
 
-pub fn rotate_keys() -> Result<()> {
+/// Rotates the first active key ([`KeyMap::active_pems`]) into a new key of its own policy. With
+/// a `migrate_to` policy, the first active key of an older policy is rotated into a new key of
+/// `migrate_to` instead.
+pub fn rotate_keys(migrate_to: Option<&'static dyn Policy>) -> Result<()> {
     let key_map = KeyMap::from_path()?;
 
-    let pems = key_map
-        .private_pems()
-        .iter()
-        .filter(|x| x.is_active())
-        .collect::<Vec<_>>();
-    let pem = pems.first().unwrap(); // todo, based on filename
+    let mut active_pems = key_map.active_pems();
 
-    // A key is rotated into a new key of its own policy. Only V1 keys can be rotated.
+    let (pem, target_policy) = match migrate_to {
+        None => {
+            let pem = active_pems
+                .next()
+                .context("could not rotate, there is no active private key")?;
+            (pem, pem.policy())
+        }
+        Some(target_policy) => {
+            let pem = active_pems
+                .find(|pem| pem.policy().file_version() < target_policy.file_version())
+                .with_context(|| {
+                    format!(
+                        "could not migrate, there is no active private key older than V{}",
+                        target_policy.file_version()
+                    )
+                })?;
+            (pem, target_policy)
+        }
+    };
+
     let source_policy = pem.policy();
-    ensure!(
-        source_policy.file_version() == Version1.file_version(),
-        "could not rotate the key {:?}, rotating V2 keys is not supported",
-        pem.name()
-    );
-    let target_policy = source_policy;
+    ensure_no_downgrade(
+        pem.name(),
+        source_policy.file_version(),
+        key_map.registered_file_version(pem.name()),
+        target_policy,
+    )?;
 
     if !Question::confirm(&format!(
         "do you want to rotate your private key {:?}?",
@@ -39,7 +56,7 @@ pub fn rotate_keys() -> Result<()> {
 
     println!("1. generate new key");
     target_policy
-        .create_key(username_rotated)
+        .create_replacement_key(username_rotated, pem)
         .context("create_keys")?;
 
     let keymap = KeyMap::from_path()?;
@@ -55,8 +72,30 @@ pub fn rotate_keys() -> Result<()> {
     Ok(())
 }
 
+/// A key is never rotated into a policy whose files have a lower version than the rotated key
+/// (`source_version`) or than a key the repository registers under its name
+/// (`registered_version`).
+fn ensure_no_downgrade(
+    name: &str,
+    source_version: u16,
+    registered_version: Option<u16>,
+    target: &dyn Policy,
+) -> Result<()> {
+    let newest_version = registered_version.map_or(source_version, |registered_version| {
+        registered_version.max(source_version)
+    });
+
+    ensure!(
+        target.file_version() >= newest_version,
+        "could not rotate the key {name:?} into a V{} key, it already has a V{newest_version} key",
+        target.file_version()
+    );
+
+    Ok(())
+}
+
 fn rename_user(target_policy: &dyn Policy, username_from: &str, username_to: &str) -> Result<()> {
-    let mut renames = target_policy.key_renames(username_from, username_to);
+    let mut renames = target_policy.key_renames(username_from, username_to)?;
 
     let secret_directory_path = "./.vault/secrets/";
 
@@ -173,9 +212,9 @@ fn delete_user(source_policy: &dyn Policy, username: &str) -> Result<()> {
         Err(_) => bail!("SystemTime before UNIX_EPOCH"),
     };
 
-    source_policy.backup_private_key(username, timestamp);
-
-    Ok(())
+    source_policy
+        .backup_private_key(username, timestamp)
+        .context("could not back up the private key")
 }
 
 fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<()> {
@@ -211,4 +250,38 @@ fn allow_access_to_all_keys(keymap: &KeyMap, username_rotated: &str) -> Result<(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::policy::{Version1, Version2};
+
+    #[test]
+    fn test_no_downgrade() {
+        for (source_version, registered_version, target) in [
+            (1, None, &Version1 as &dyn Policy),
+            (1, Some(1), &Version1),
+            (1, None, &Version2),
+            (1, Some(1), &Version2),
+            (1, Some(2), &Version2),
+            (2, Some(2), &Version2),
+        ] {
+            assert!(
+                ensure_no_downgrade("key", source_version, registered_version, target).is_ok(),
+                "{source_version} {registered_version:?} {target:?}"
+            );
+        }
+
+        // A V1 key whose user is registered with a V2 key, and a V2 key.
+        for (source_version, registered_version) in [(1, Some(2)), (2, Some(2)), (2, None)] {
+            assert_eq!(
+                ensure_no_downgrade("key", source_version, registered_version, &Version1)
+                    .unwrap_err()
+                    .to_string(),
+                "could not rotate the key \"key\" into a V1 key, it already has a V2 key",
+                "{source_version} {registered_version:?}"
+            );
+        }
+    }
 }

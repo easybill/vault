@@ -252,7 +252,25 @@ impl Policy for Version1 {
         Ok(UnencryptedVaultFile::new(content))
     }
 
-    fn backup_private_key(&self, username: &str, timestamp: u64) {
+    /// The replacement is a new key named after `username`, the replaced key does not matter.
+    fn create_replacement_key(&self, username: &str, _replaced: &Pem) -> Result<Pem> {
+        self.create_key(username)
+    }
+
+    /// Only renames `./.vault/private_keys/<username>.pem` and its public key. If a file of that
+    /// backup name exists, the timestamp is increased until none does. Failures are ignored, a
+    /// key loaded from another directory stays where it is.
+    fn backup_private_key(&self, username: &str, timestamp: u64) -> Result<()> {
+        let mut timestamp = timestamp;
+        while [".pem", PUBLIC_KEY_EXTENSION].iter().any(|extension| {
+            fs::metadata(format!(
+                "./.vault/private_keys/{username}_backup_{timestamp}{extension}"
+            ))
+            .is_ok()
+        }) {
+            timestamp += 1;
+        }
+
         let _ = fs::rename(
             format!("./.vault/private_keys/{username}.pem"),
             format!("./.vault/private_keys/{username}_backup_{timestamp}.pem"),
@@ -261,10 +279,12 @@ impl Policy for Version1 {
             format!("./.vault/private_keys/{username}{PUBLIC_KEY_EXTENSION}"),
             format!("./.vault/private_keys/{username}_backup_{timestamp}{PUBLIC_KEY_EXTENSION}"),
         );
+
+        Ok(())
     }
 
-    fn key_renames(&self, from: &str, to: &str) -> Vec<Rename> {
-        vec![
+    fn key_renames(&self, from: &str, to: &str) -> Result<Vec<Rename>> {
+        Ok(vec![
             Rename {
                 from: format!("./.vault/private_keys/{from}.pem"),
                 to: format!("./.vault/private_keys/{to}.pem"),
@@ -281,7 +301,7 @@ impl Policy for Version1 {
                 from: format!("./.vault/keys/{to}/{from}{PUBLIC_KEY_EXTENSION}"),
                 to: format!("./.vault/keys/{to}/{to}{PUBLIC_KEY_EXTENSION}"),
             },
-        ]
+        ])
     }
 }
 

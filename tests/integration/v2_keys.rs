@@ -1,6 +1,6 @@
 //! V2 keys: `vault create-key <user>`, the repository ID, the key directory (`VAULT_V2_KEY_PATH`
-//! or `$HOME/.vault/v2`), loading of current and backup keys, keys stored as `.pem.pgp`, which
-//! user a local key belongs to and `vault rotate` with a V2 key.
+//! or `$HOME/.vault/v2`), loading of current and backup keys, keys stored as `.pem.pgp` and which
+//! user a local key belongs to.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -782,22 +782,6 @@ fn create_key_refuses_an_existing_pgp_key() {
              already exists\n"
         ),
         "create-key",
-    );
-    assert_eq!(snapshot(&vault.path()), before, "nothing may change");
-}
-
-// MARK: Rotation
-
-#[test]
-fn rotate_refuses_a_v2_key() {
-    let vault = TestVault::from_fixture(GOLDEN_V2);
-    let before = snapshot(&vault.path());
-
-    assert_failure(
-        &run(as_v2_user(&vault, "carol").arg("rotate")),
-        "Vault error: rotate keys\n\nCaused by:\n    could not rotate the key \"carol\", \
-         rotating V2 keys is not supported\n",
-        "rotate",
     );
     assert_eq!(snapshot(&vault.path()), before, "nothing may change");
 }

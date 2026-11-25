@@ -9,7 +9,7 @@ mod v1;
 mod v2;
 
 pub use v1::Version1;
-use v2::Version2;
+pub use v2::Version2;
 
 /// A policy defines how keys are stored, named and created, the cryptography used with them and
 /// the version of the `.crypt` files it produces. Every key belongs to exactly one policy.
@@ -35,12 +35,17 @@ pub trait Policy: Debug + Send + Sync {
 
     fn decrypt(&self, pem: &Pem, file: &VaultFile) -> Result<UnencryptedVaultFile>;
 
-    /// Moves the private key of `username` aside under a backup name containing `timestamp`.
-    /// Failures are ignored.
-    fn backup_private_key(&self, username: &str, timestamp: u64);
+    /// Creates the key pair that replaces `replaced` in a rotation and registers it in the
+    /// repository as user `username`. `replaced` belongs to this policy or to an older one.
+    fn create_replacement_key(&self, username: &str, replaced: &Pem) -> Result<Pem>;
 
-    /// The renames, in order, that move the keys of user `from` to user `to`.
-    fn key_renames(&self, from: &str, to: &str) -> Vec<Rename>;
+    /// Moves the private key of the rotated user `username` aside under a backup name containing
+    /// `timestamp`.
+    fn backup_private_key(&self, username: &str, timestamp: u64) -> Result<()>;
+
+    /// The renames, in order, that move the keys created by
+    /// [`Policy::create_replacement_key`] for user `from` to user `to`.
+    fn key_renames(&self, from: &str, to: &str) -> Result<Vec<Rename>>;
 }
 
 /// A file or directory rename.
