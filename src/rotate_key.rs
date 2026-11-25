@@ -1,11 +1,11 @@
 use std::fs::{self, remove_dir, remove_file};
 use std::time::SystemTime;
 
-use anyhow::{Context, anyhow, bail};
+use anyhow::{Context, anyhow, bail, ensure};
 
 use crate::Result;
 use crate::key::key_map::{KeyMap, Subscription};
-use crate::policy::{self, Policy, Rename};
+use crate::policy::{Policy, Rename, Version1};
 use crate::ui::question::Question;
 
 pub fn rotate_keys() -> Result<()> {
@@ -14,12 +14,18 @@ pub fn rotate_keys() -> Result<()> {
     let pems = key_map
         .private_pems()
         .iter()
-        .filter(|x| x.policy().is_rotatable(x))
+        .filter(|x| x.is_active())
         .collect::<Vec<_>>();
     let pem = pems.first().unwrap(); // todo, based on filename
 
+    // A key is rotated into a new key of its own policy. Only V1 keys can be rotated.
     let source_policy = pem.policy();
-    let target_policy = policy::current();
+    ensure!(
+        source_policy.file_version() == Version1.file_version(),
+        "could not rotate the key {:?}, rotating V2 keys is not supported",
+        pem.name()
+    );
+    let target_policy = source_policy;
 
     if !Question::confirm(&format!(
         "do you want to rotate your private key {:?}?",

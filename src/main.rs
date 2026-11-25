@@ -7,6 +7,7 @@ use semver::{Version, VersionReq};
 use crate::commands::get_multi::get_multi;
 use crate::filesystem::{Filesystem, FilesystemCheckResult};
 use crate::key::key_map::KeyMap;
+use crate::policy::{Policy, Version1};
 use crate::rotate_key::rotate_keys;
 use crate::template::Template;
 use crate::ui::question::Question;
@@ -54,6 +55,15 @@ fn run() -> Result<()> {
                     Arg::new("json")
                         .required(true)
                         .help(r#"something like {"secrets": [{"secret": "foo"}], "templates": [{"template": "{vault{ foo }vault}TEST"}]}"#),
+                ),
+        )
+        .subcommand(
+            clap::Command::new("create-key")
+                .about("creates a new X-Wing key and registers the user")
+                .arg(
+                    Arg::new("username")
+                        .required(true)
+                        .help("name of the new user"),
                 ),
         )
         .subcommand(
@@ -154,12 +164,22 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    if let Some(matches) = matches.subcommand_matches("create-openssl-key") {
+    if let Some(matches) = matches.subcommand_matches("create-key") {
         let username = matches
             .get_one::<String>("username")
             .expect("username must exist");
 
         policy::current().create_key(username)?;
+
+        return Ok(());
+    }
+
+    if let Some(matches) = matches.subcommand_matches("create-openssl-key") {
+        let username = matches
+            .get_one::<String>("username")
+            .expect("username must exist");
+
+        Version1.create_key(username)?;
 
         return Ok(());
     }

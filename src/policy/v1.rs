@@ -93,7 +93,7 @@ impl Policy for Version1 {
                     );
                 }
 
-                buffer.push(Pem::new(
+                buffer.push(Self::pem(
                     Self::load_private_key(&path_as_string)
                         .with_context(|| format!("could not add private key: {path_as_string}"))?,
                     Self::load_public_key(&public_key_path)
@@ -196,7 +196,7 @@ impl Policy for Version1 {
                 .with_context(|| format!("could not write to {private_key_path}"))?
         }
 
-        Ok(Pem::new(
+        Ok(Self::pem(
             Self::load_private_key(&private_key_path)
                 .with_context(|| format!("failed, to add key, private key: {private_key_path}"))?,
             Self::load_public_key(&public_key_path)
@@ -252,10 +252,6 @@ impl Policy for Version1 {
         Ok(UnencryptedVaultFile::new(content))
     }
 
-    fn is_rotatable(&self, pem: &Pem) -> bool {
-        !pem.name().contains("_backup_")
-    }
-
     fn backup_private_key(&self, username: &str, timestamp: u64) {
         let _ = fs::rename(
             format!("./.vault/private_keys/{username}.pem"),
@@ -290,6 +286,12 @@ impl Policy for Version1 {
 }
 
 impl Version1 {
+    /// A loaded key pair. Keys with `_backup_` in their name are not active.
+    fn pem(private_key: PrivateKey, public_key: PublicKey) -> Pem {
+        let active = !private_key.name().contains("_backup_");
+        Pem::new(private_key, public_key, active)
+    }
+
     /// The configured private key directory, `VAULT_PRIVATE_KEY_PATH` or `./.vault/private_keys`.
     fn private_key_dir() -> String {
         std::env::vars()
@@ -396,7 +398,7 @@ mod test {
             &Version1,
         );
 
-        Pem::new(private_key, public_key)
+        Pem::new(private_key, public_key, true)
     }
 
     #[test]

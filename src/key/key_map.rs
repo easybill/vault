@@ -408,9 +408,13 @@ impl KeyMap {
     }
 
     pub fn add_new_secret(&self, filepath: &str) -> Result<()> {
-        let pem = self.private_pems().first().with_context(|| {
-            format!("could not fine private key for you, no idea how to encrypt {filepath}")
-        })?;
+        let pem = self
+            .private_pems()
+            .iter()
+            .find(|pem| pem.is_active())
+            .with_context(|| {
+                format!("could not fine private key for you, no idea how to encrypt {filepath}")
+            })?;
 
         let file_content = {
             let mut f =

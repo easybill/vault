@@ -361,13 +361,13 @@ fn crafted_bad_magic_fails() {
 }
 
 #[test]
-fn crafted_version_2_fails() {
-    let file = patched(2..4, &2u16.to_be_bytes());
+fn crafted_version_3_fails() {
+    let file = patched(2..4, &3u16.to_be_bytes());
     // The message lacks the supported version number.
     assert_failure(
         &get_crafted(&file),
-        &vault_file_error("only version is supported, found 2"),
-        "crafted_version_2_fails",
+        &vault_file_error("only version is supported, found 3"),
+        "crafted_version_3_fails",
     );
 }
 

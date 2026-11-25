@@ -1,22 +1,27 @@
 [package]
 name = "vault"
-version = "1.0.31"
+version = "2.0.0"
 authors = ["Plattform Team <server@easybill.de>"]
 edition = "2024"
 
 [dependencies]
+aes-gcm = { version = "0.11", features = ["zeroize"] }
 anyhow = { version = "1", features = ["backtrace"] }
 byteorder = "1"
 clap = "4"
 dirs = "7"
 globset = "0.4"
 openssl = { version = "0.10", features = ["vendored"] }
+pem-rfc7468 = { version = "1", features = ["std"] }
 regex = "1"
 semver = "1"
 serde = "1"
 serde_derive = "1"
 serde_json = "1"
+sha3 = "0.12"
 toml = "1"
+uuid = { version = "1", features = ["v7"] }
+x-wing = { version = "0.1", features = ["getrandom", "zeroize"] }
 
 [dev-dependencies]
 assert_cmd = "2"

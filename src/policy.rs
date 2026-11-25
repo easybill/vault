@@ -6,8 +6,10 @@ use crate::key::{Pem, PublicKey};
 use crate::proto::{UnencryptedVaultFile, VaultFile};
 
 mod v1;
+mod v2;
 
-use v1::Version1;
+pub use v1::Version1;
+use v2::Version2;
 
 /// A policy defines how keys are stored, named and created, the cryptography used with them and
 /// the version of the `.crypt` files it produces. Every key belongs to exactly one policy.
@@ -33,9 +35,6 @@ pub trait Policy: Debug + Send + Sync {
 
     fn decrypt(&self, pem: &Pem, file: &VaultFile) -> Result<UnencryptedVaultFile>;
 
-    /// Whether `pem` is an active key that can be selected for rotation.
-    fn is_rotatable(&self, pem: &Pem) -> bool;
-
     /// Moves the private key of `username` aside under a backup name containing `timestamp`.
     /// Failures are ignored.
     fn backup_private_key(&self, username: &str, timestamp: u64);
@@ -51,11 +50,11 @@ pub struct Rename {
 }
 
 /// All supported policies.
-pub static ALL: &[&dyn Policy] = &[&Version1];
+pub static ALL: &[&dyn Policy] = &[&Version1, &Version2];
 
 /// The policy used for new keys.
 pub fn current() -> &'static dyn Policy {
-    &Version1
+    &Version2
 }
 
 pub fn by_file_version(version: u16) -> Option<&'static dyn Policy> {
