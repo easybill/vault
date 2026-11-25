@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
 use anyhow::{Context, bail};
-use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 
 use crate::Result;
 use crate::policy;
@@ -30,7 +30,8 @@ pub struct VaultFile {
 
 const VAULT_MAGIC_BYTE: u16 = 4242;
 
-const VAULT_HEADER_SIZE: usize = 2 + 2 + 8 + 8;
+/// Size of the header in front of every `.crypt` file: magic, version, key and content length.
+pub const VAULT_HEADER_SIZE: usize = 2 + 2 + 8 + 8;
 
 impl VaultFile {
     pub fn new(version: u16, keyfile_content: Vec<u8>, secret_content: Vec<u8>) -> Self {
@@ -51,6 +52,29 @@ impl VaultFile {
 
     pub fn secret_content(&self) -> &[u8] {
         self.secret_content.as_slice()
+    }
+
+    /// The header of this file, byte for byte as [`VaultFile::write`] writes it.
+    pub fn header(&self) -> [u8; VAULT_HEADER_SIZE] {
+        Self::header_for(
+            self.version,
+            self.keyfile_content.len(),
+            self.secret_content.len(),
+        )
+    }
+
+    /// The header of a file with the given version and content lengths.
+    pub fn header_for(
+        version: u16,
+        keyfile_len: usize,
+        secret_len: usize,
+    ) -> [u8; VAULT_HEADER_SIZE] {
+        let mut header = [0; VAULT_HEADER_SIZE];
+        BigEndian::write_u16(&mut header[0..2], VAULT_MAGIC_BYTE);
+        BigEndian::write_u16(&mut header[2..4], version);
+        BigEndian::write_u64(&mut header[4..12], keyfile_len as u64);
+        BigEndian::write_u64(&mut header[12..20], secret_len as u64);
+        header
     }
 
     pub fn open(mut content: impl Read) -> Result<Self> {
@@ -98,14 +122,8 @@ impl VaultFile {
     }
 
     pub fn write(&self, mut to: impl Write) -> Result<()> {
-        to.write_u16::<BigEndian>(VAULT_MAGIC_BYTE)
-            .context("could not write magic byte")?;
-        to.write_u16::<BigEndian>(self.version)
-            .context("could not write version")?;
-        to.write_u64::<BigEndian>(self.keyfile_content.len() as u64)
-            .context("could not write keyfile")?;
-        to.write_u64::<BigEndian>(self.secret_content.len() as u64)
-            .context("could not write secret")?;
+        to.write_all(&self.header())
+            .context("could not write header")?;
         to.write_all(&self.keyfile_content)
             .context("could not write keyfile content")?;
         to.write_all(&self.secret_content)

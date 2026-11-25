@@ -223,6 +223,7 @@ impl TestVault {
             .env_remove("CLICOLOR_FORCE")
             .env_remove("VAULT_FORCE_YES")
             .env_remove("VAULT_PRIVATE_KEY_PATH")
+            .env_remove("VAULT_V2_KEY_PATH")
             .env_remove("RUST_BACKTRACE")
             .env_remove("RUST_LIB_BACKTRACE");
         cmd

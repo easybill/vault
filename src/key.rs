@@ -25,18 +25,26 @@ pub struct PrivateKey {
 pub struct Pem {
     public_key: PublicKey,
     private_key: PrivateKey,
+    active: bool,
 }
 
 impl Pem {
-    pub fn new(private_key: PrivateKey, public_key: PublicKey) -> Self {
+    /// A local key pair. Only an `active` key encrypts new secrets and can be rotated, every key
+    /// decrypts.
+    pub fn new(private_key: PrivateKey, public_key: PublicKey, active: bool) -> Self {
         Pem {
             private_key,
             public_key,
+            active,
         }
     }
 
     pub fn name(&self) -> &str {
         self.private_key.name()
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.active
     }
 
     pub fn private_key(&self) -> &PrivateKey {
