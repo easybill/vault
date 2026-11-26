@@ -4,4 +4,3 @@
 .idea/*
 .vault/private_keys/*.pem
 .vault/*
-vault_integration_test/*

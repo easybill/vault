@@ -1,213 +1,251 @@
 //! Test utilities for vault integration tests.
 //!
-//! Provides a `TestVault` builder that creates isolated test environments with
-//! dynamically generated RSA keys and encrypted secrets.
+//! `TestVault::from_fixture` copies a committed fixture from `tests/fixtures/` into an isolated
+//! temporary directory and runs the vault binary against it with an empty `HOME`.
+//! `TestVault::empty` does the same with an empty working directory.
 
-#![allow(dead_code)] // Not all test files use all helpers
+#![allow(dead_code)] // Not all test targets use all helpers
 
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Output;
+use std::time::Duration;
 
 use assert_cmd::Command;
-use byteorder::{BigEndian, WriteBytesExt};
-use openssl::rand::{rand_bytes, rand_priv_bytes};
-use openssl::rsa::{Padding, Rsa};
-use openssl::symm::{Cipher, encrypt};
 use tempfile::TempDir;
 
-const KEY_SIZE: usize = 256 / 8; // 32 bytes for AES-256
-const IV_SIZE: usize = 128 / 8; // 16 bytes for AES-256-CBC
-const VAULT_MAGIC_BYTE: u16 = 4242;
+/// Returns the path of a committed fixture, e.g. `fixture_dir("v1/golden")`.
+pub fn fixture_dir(fixture: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(fixture)
+}
 
-/// A test vault environment with isolated directory and generated fixtures.
+/// Recursively copies the directory `from` into the (not yet existing) directory `to`.
+pub fn copy_dir_recursive(from: &Path, to: &Path) {
+    fs::create_dir(to).unwrap_or_else(|error| panic!("could not create {}: {error}", to.display()));
+
+    for entry in fs::read_dir(from)
+        .unwrap_or_else(|error| panic!("could not read {}: {error}", from.display()))
+    {
+        let entry = entry.expect("could not read directory entry");
+        let file_type = entry.file_type().expect("could not read file type");
+        let target = to.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &target);
+        } else if file_type.is_file() {
+            fs::copy(entry.path(), &target).unwrap_or_else(|error| {
+                panic!("could not copy {}: {error}", entry.path().display())
+            });
+        } else {
+            panic!(
+                "unexpected file type in fixture: {}",
+                entry.path().display()
+            );
+        }
+    }
+}
+
+/// Asserts that the vault process did not panic.
+pub fn assert_no_panic(output: &Output) {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("panicked at"),
+        "vault panicked, stderr:\n{stderr}"
+    );
+    assert_ne!(
+        output.status.code(),
+        Some(101),
+        "vault exited with the panic exit code, stderr:\n{stderr}"
+    );
+}
+
+/// Runs the command and asserts that vault did not panic.
+pub fn run(cmd: &mut Command) -> Output {
+    let output = cmd.output().expect("could not run vault");
+    assert_no_panic(&output);
+    output
+}
+
+/// Asserts that vault exited with `code` and printed exactly `stdout` and `stderr`.
+pub fn assert_output(output: &Output, code: i32, stdout: &[u8], stderr: &str, context: &str) {
+    let actual_stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(code),
+        "{context}: exit code, stderr: {actual_stderr}"
+    );
+    assert_eq!(
+        output.stdout,
+        stdout,
+        "{context}: stdout, as text: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert_eq!(actual_stderr, stderr, "{context}: stderr");
+}
+
+/// Asserts a successful run with exactly `stdout` and `stderr`.
+pub fn assert_success(output: &Output, stdout: &[u8], stderr: &str, context: &str) {
+    assert_output(output, 0, stdout, stderr, context);
+}
+
+/// Asserts a failed run: exit code 1, no stdout and exactly `stderr`.
+pub fn assert_failure(output: &Output, stderr: &str, context: &str) {
+    assert_output(output, 1, b"", stderr, context);
+}
+
+/// Every file (with its contents) and directory (`None`) below a directory, by relative path.
+pub type Snapshot = BTreeMap<PathBuf, Option<Vec<u8>>>;
+
+/// Every file and directory below `dir` (relative paths), with the contents of the files.
+/// Comparing two snapshots shows whether a run changed anything on disk.
+pub fn snapshot(dir: &Path) -> Snapshot {
+    fn walk(root: &Path, dir: &Path, entries: &mut Snapshot) {
+        for entry in fs::read_dir(dir)
+            .unwrap_or_else(|error| panic!("could not read {}: {error}", dir.display()))
+        {
+            let path = entry.expect("could not read directory entry").path();
+            let relative = path.strip_prefix(root).unwrap().to_path_buf();
+            if path.is_dir() {
+                entries.insert(relative, None);
+                walk(root, &path, entries);
+            } else {
+                entries.insert(relative, Some(fs::read(&path).unwrap()));
+            }
+        }
+    }
+
+    let mut entries = BTreeMap::new();
+    walk(dir, dir, &mut entries);
+    entries
+}
+
+/// Asserts that `after` differs from `before` only in `changed`: each of these relative paths
+/// must exist in `after` (new or modified), every other entry must be unchanged.
+pub fn assert_only_changed(before: &Snapshot, after: &Snapshot, changed: &[&str]) {
+    let mut before = before.clone();
+    let mut after = after.clone();
+    for path in changed {
+        before.remove(Path::new(path));
+        assert!(
+            after.remove(Path::new(path)).is_some(),
+            "{path} must exist after the run"
+        );
+    }
+    let changed_paths = |snapshot: &Snapshot, other: &Snapshot| {
+        snapshot
+            .iter()
+            .filter(|(path, content)| other.get(*path) != Some(*content))
+            .map(|(path, _)| path.display().to_string())
+            .collect::<Vec<_>>()
+    };
+    assert!(
+        before == after,
+        "unexpected changes on disk, only {changed:?} may change. \
+         before (differing): {:?}, after (differing): {:?}",
+        changed_paths(&before, &after),
+        changed_paths(&after, &before),
+    );
+}
+
+/// How long a vault command that asks questions may run. vault asks again on every unexpected
+/// answer, also at the end of stdin, so a missing answer would otherwise keep it running.
+pub const ANSWER_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// An isolated vault working directory with its own empty `HOME`.
 pub struct TestVault {
     temp_dir: TempDir,
-    username: String,
 }
 
 impl TestVault {
-    /// Create a new TestVault builder.
-    pub fn builder() -> TestVaultBuilder {
-        TestVaultBuilder::default()
+    /// Copies the fixture `tests/fixtures/<fixture>` into a new temporary directory and creates
+    /// an empty `home/` next to it.
+    pub fn from_fixture(fixture: &str) -> TestVault {
+        let temp_dir = TempDir::new().expect("could not create temp directory");
+        copy_dir_recursive(&fixture_dir(fixture), &temp_dir.path().join("vault"));
+        fs::create_dir(temp_dir.path().join("home")).expect("could not create home directory");
+        TestVault { temp_dir }
     }
 
-    /// Get the path to the vault directory.
-    pub fn path(&self) -> &Path {
-        self.temp_dir.path()
+    /// Creates a new temporary directory with an empty working directory and an empty `home/`.
+    pub fn empty() -> TestVault {
+        let temp_dir = TempDir::new().expect("could not create temp directory");
+        fs::create_dir(temp_dir.path().join("vault")).expect("could not create vault directory");
+        fs::create_dir(temp_dir.path().join("home")).expect("could not create home directory");
+        TestVault { temp_dir }
     }
 
-    /// Create a Command configured to run vault in this test directory.
-    #[allow(deprecated)] // cargo_bin works fine for standard cargo layouts
+    /// The temporary directory that holds the working directory and `HOME`. Tests can put
+    /// further files here that vault does not see.
+    pub fn root(&self) -> PathBuf {
+        self.temp_dir.path().to_path_buf()
+    }
+
+    /// The working directory vault runs in.
+    pub fn path(&self) -> PathBuf {
+        self.temp_dir.path().join("vault")
+    }
+
+    /// The `HOME` directory vault sees.
+    pub fn home(&self) -> PathBuf {
+        self.temp_dir.path().join("home")
+    }
+
+    /// A vault command that answers every question with yes (`VAULT_FORCE_YES=1`).
     pub fn command(&self) -> Command {
-        let mut cmd = Command::cargo_bin("vault").unwrap();
-        cmd.current_dir(self.path()).env("VAULT_FORCE_YES", "1");
+        let mut cmd = self.base_command();
+        cmd.env("VAULT_FORCE_YES", "1");
         cmd
     }
 
-    /// Get the username used for this vault.
-    pub fn username(&self) -> &str {
-        &self.username
-    }
-}
-
-/// Builder for creating test vault environments.
-#[derive(Default)]
-pub struct TestVaultBuilder {
-    username: Option<String>,
-    secrets: Vec<(String, Vec<u8>)>,
-}
-
-impl TestVaultBuilder {
-    /// Add a secret with the given name and plaintext content.
-    pub fn with_secret(mut self, name: impl Into<String>, content: impl Into<Vec<u8>>) -> Self {
-        self.secrets.push((name.into(), content.into()));
-        self
+    /// A vault command that asks its questions on stdin, killed after [`ANSWER_TIMEOUT`].
+    /// Callers can set a longer timeout with `Command::timeout`.
+    pub fn interactive(&self) -> Command {
+        let mut cmd = self.base_command();
+        cmd.timeout(ANSWER_TIMEOUT);
+        cmd
     }
 
-    /// Build the TestVault with all fixtures generated.
-    pub fn build(self) -> TestVault {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
-        let username = self.username.unwrap_or_else(|| "testuser".to_string());
-
-        // Create .vault directory structure
-        let public_key_pem = create_vault_structure(temp_dir.path(), &username);
-
-        // Create encrypted secrets
-        for (name, content) in &self.secrets {
-            create_encrypted_secret(temp_dir.path(), &username, name, content, &public_key_pem);
-        }
-
-        TestVault { temp_dir, username }
+    /// A vault command that reads `answers` as its stdin, killed after [`ANSWER_TIMEOUT`].
+    pub fn answering(&self, answers: &str) -> Command {
+        let mut cmd = self.interactive();
+        cmd.write_stdin(answers);
+        cmd
     }
-}
 
-/// Create the .vault directory structure with keys for the given user.
-/// Returns the public key PEM data for encrypting secrets.
-fn create_vault_structure(base_path: &Path, username: &str) -> Vec<u8> {
-    let vault_dir = base_path.join(".vault");
+    fn base_command(&self) -> Command {
+        let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("vault");
+        cmd.current_dir(self.path())
+            .env("HOME", self.home())
+            .env("NO_COLOR", "1")
+            .env_remove("CLICOLOR_FORCE")
+            .env_remove("VAULT_FORCE_YES")
+            .env_remove("VAULT_PRIVATE_KEY_PATH")
+            .env_remove("RUST_BACKTRACE")
+            .env_remove("RUST_LIB_BACKTRACE");
+        cmd
+    }
 
-    // Create directories
-    fs::create_dir_all(vault_dir.join("private_keys")).expect("Failed to create private_keys dir");
-    fs::create_dir_all(vault_dir.join("keys").join(username)).expect("Failed to create keys dir");
-    fs::create_dir_all(vault_dir.join("secrets")).expect("Failed to create secrets dir");
+    /// `.vault/secrets/<secret>`
+    pub fn secret_dir(&self, secret: &str) -> PathBuf {
+        self.path().join(".vault/secrets").join(secret)
+    }
 
-    // Generate RSA-2048 keypair (smaller than production 8096 for faster tests)
-    let rsa = Rsa::generate(2048).expect("Failed to generate RSA key");
-    let private_pem = rsa
-        .private_key_to_pem()
-        .expect("Failed to export private key");
-    let public_pem = rsa
-        .public_key_to_pem()
-        .expect("Failed to export public key");
+    /// `.vault/secrets/<secret>/<user>.crypt`
+    pub fn crypt_path(&self, secret: &str, user: &str) -> PathBuf {
+        self.secret_dir(secret).join(format!("{user}.crypt"))
+    }
 
-    // Write private key
-    let private_key_path = vault_dir
-        .join("private_keys")
-        .join(format!("{username}.pem"));
-    File::create(&private_key_path)
-        .expect("Failed to create private key file")
-        .write_all(&private_pem)
-        .expect("Failed to write private key");
+    /// `expected/<secret>`, the plaintext of a fixture secret.
+    pub fn expected_path(&self, secret: &str) -> PathBuf {
+        self.path().join("expected").join(secret)
+    }
 
-    // Write public key in private_keys directory
-    let public_key_private_path = vault_dir
-        .join("private_keys")
-        .join(format!("{username}.pub.pem"));
-    File::create(&public_key_private_path)
-        .expect("Failed to create public key file (private_keys)")
-        .write_all(&public_pem)
-        .expect("Failed to write public key");
-
-    // Write public key in keys/{username}/ directory
-    let public_key_path = vault_dir
-        .join("keys")
-        .join(username)
-        .join(format!("{username}.pub.pem"));
-    File::create(&public_key_path)
-        .expect("Failed to create public key file")
-        .write_all(&public_pem)
-        .expect("Failed to write public key");
-
-    // Write config.toml
-    let config_path = vault_dir.join("keys").join(username).join("config.toml");
-    File::create(&config_path)
-        .expect("Failed to create config.toml")
-        .write_all(b"subscriptions = []")
-        .expect("Failed to write config.toml");
-
-    public_pem
-}
-
-/// Encrypt content and write as a .crypt file in the vault file format.
-fn create_encrypted_secret(
-    base_path: &Path,
-    username: &str,
-    secret_name: &str,
-    content: &[u8],
-    public_key_pem: &[u8],
-) {
-    let vault_dir = base_path.join(".vault");
-
-    // Parse the public key
-    let rsa = Rsa::public_key_from_pem(public_key_pem)
-        .expect("Failed to parse public key for encryption");
-
-    // Generate AES key and IV
-    let mut aes_key = [0u8; KEY_SIZE];
-    rand_priv_bytes(&mut aes_key).expect("Failed to generate AES key");
-
-    let mut iv = vec![0u8; IV_SIZE];
-    rand_bytes(&mut iv).expect("Failed to generate IV");
-
-    // Encrypt AES key with RSA public key
-    let mut encrypted_aes_key = vec![0u8; rsa.size() as usize];
-    let encrypted_key_len = rsa
-        .public_encrypt(&aes_key, &mut encrypted_aes_key, Padding::PKCS1)
-        .expect("Failed to encrypt AES key");
-    assert_eq!(encrypted_key_len, encrypted_aes_key.len());
-
-    // Encrypt content with AES-256-CBC
-    let cipher = Cipher::aes_256_cbc();
-    let encrypted_content =
-        encrypt(cipher, &aes_key, Some(&iv), content).expect("Failed to encrypt content");
-
-    // Prepend IV to encrypted content
-    let mut content_with_iv = iv;
-    content_with_iv.extend(encrypted_content);
-
-    // Create secret directory and write vault file
-    let secret_dir = vault_dir.join("secrets").join(secret_name);
-    fs::create_dir_all(&secret_dir).expect("Failed to create secret directory");
-
-    let crypt_file_path = secret_dir.join(format!("{username}.crypt"));
-    let mut file = File::create(&crypt_file_path).expect("Failed to create crypt file");
-
-    // Write vault file format (from src/proto.rs):
-    // [magic_byte: u16][version: u16][key_size: u64][content_size: u64][encrypted_key][iv+encrypted_content]
-    file.write_u16::<BigEndian>(VAULT_MAGIC_BYTE)
-        .expect("Failed to write magic byte");
-    file.write_u16::<BigEndian>(1)
-        .expect("Failed to write version");
-    file.write_u64::<BigEndian>(encrypted_aes_key.len() as u64)
-        .expect("Failed to write key size");
-    file.write_u64::<BigEndian>(content_with_iv.len() as u64)
-        .expect("Failed to write content size");
-    file.write_all(&encrypted_aes_key)
-        .expect("Failed to write encrypted key");
-    file.write_all(&content_with_iv)
-        .expect("Failed to write encrypted content");
-}
-
-/// Helper to remove backup files created during key rotation.
-pub fn clean_backup_files(vault_path: &Path) {
-    let private_keys_dir = vault_path.join(".vault/private_keys");
-    if let Ok(entries) = fs::read_dir(&private_keys_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file() && path.to_string_lossy().contains("_backup_") {
-                let _ = fs::remove_file(&path);
-            }
-        }
+    /// The plaintext of a fixture secret.
+    pub fn expected(&self, secret: &str) -> Vec<u8> {
+        let path = self.expected_path(secret);
+        fs::read(&path).unwrap_or_else(|error| panic!("could not read {}: {error}", path.display()))
     }
 }
