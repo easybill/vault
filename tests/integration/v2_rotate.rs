@@ -838,6 +838,63 @@ fn migrate_backs_up_the_v1_key_under_a_free_name() {
     );
 }
 
+/// A gpg encrypted V1 key is backed up with its public key, a `.pem.pgp` without its public key
+/// would fail every later command.
+#[cfg(unix)]
+#[test]
+fn migrate_backs_up_a_pgp_v1_key() {
+    use crate::support::FakeGpg;
+
+    let vault = TestVault::from_fixture(GOLDEN);
+    let private_keys = vault.path().join(".vault/private_keys");
+    let plain_key = vault.root().join("alice.plain.pem");
+    fs::rename(private_keys.join("alice.pem"), &plain_key).unwrap();
+    fs::write(private_keys.join("alice.pem.pgp"), "not really encrypted").unwrap();
+    let gpg = FakeGpg::new(&vault.root().join("fake_gpg"), &plain_key, "", 0);
+    let with_gpg = || {
+        let mut cmd = vault.command();
+        cmd.env("PATH", gpg.path_env());
+        cmd
+    };
+
+    assert_rotate_output(
+        &run(with_gpg().args(["rotate", "--migrate", "v2"])),
+        "alice",
+        ALICE_SECRETS,
+    );
+
+    let files = file_names(&private_keys);
+    let backup = files
+        .iter()
+        .find_map(|name| name.strip_suffix(".pem.pgp"))
+        .expect("a gpg encrypted backup")
+        .to_string();
+    assert!(backup.starts_with("alice_backup_"), "{backup}");
+    assert_eq!(
+        files,
+        names(&[&format!("{backup}.pem.pgp"), &format!("{backup}.pub.pem")])
+    );
+    assert_eq!(
+        read(&private_keys.join(format!("{backup}.pem.pgp"))),
+        b"not really encrypted"
+    );
+    assert_eq!(
+        read(&private_keys.join(format!("{backup}.pub.pem"))),
+        alice_public_key()
+    );
+
+    // The migrated key reads the secrets, the backup is still loaded with gpg.
+    let calls = gpg.calls();
+    let output = get(with_gpg(), "SIMPLE");
+    assert_success(&output, &vault.expected("SIMPLE"), "", "get SIMPLE");
+    assert_eq!(
+        gpg.calls(),
+        format!(
+            "{calls}--decrypt\n--pinentry-mode\nloopback\n./.vault/private_keys/{backup}.pem.pgp\n"
+        )
+    );
+}
+
 // MARK: Superseded V1 keys
 
 /// alice's V1 key outside `./.vault/private_keys` is not backed up by a migration and stays

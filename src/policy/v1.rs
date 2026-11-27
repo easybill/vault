@@ -17,6 +17,10 @@ const IV_SIZE: usize = 128 / 8;
 
 const PUBLIC_KEY_EXTENSION: &str = ".pub.pem";
 
+/// The extensions of the files of a key: the private key, plain or gpg encrypted, and the public
+/// key.
+const KEY_EXTENSIONS: [&str; 3] = [".pem", ".pem.pgp", PUBLIC_KEY_EXTENSION];
+
 /// RSA keys wrapping an AES-256-CBC content key.
 #[derive(Debug)]
 pub struct Version1;
@@ -257,28 +261,31 @@ impl Policy for Version1 {
         self.create_key(username)
     }
 
-    /// Only renames `./.vault/private_keys/<username>.pem` and its public key. If a file of that
-    /// backup name exists, the timestamp is increased until none does. Failures are ignored, a
-    /// key loaded from another directory stays where it is.
+    /// Only renames the key files `<username>.pem`, `<username>.pem.pgp` and `<username>.pub.pem`
+    /// in `./.vault/private_keys`. If a file of that backup name exists, the timestamp is
+    /// increased until none does. A missing file is skipped, a key loaded from another directory
+    /// stays where it is.
     fn backup_private_key(&self, username: &str, timestamp: u64) -> Result<()> {
+        let path = |stem: &str, extension: &str| format!("./.vault/private_keys/{stem}{extension}");
+
         let mut timestamp = timestamp;
-        while [".pem", PUBLIC_KEY_EXTENSION].iter().any(|extension| {
-            fs::metadata(format!(
-                "./.vault/private_keys/{username}_backup_{timestamp}{extension}"
-            ))
-            .is_ok()
+        while KEY_EXTENSIONS.iter().any(|extension| {
+            fs::metadata(path(&format!("{username}_backup_{timestamp}"), extension)).is_ok()
         }) {
             timestamp += 1;
         }
 
-        let _ = fs::rename(
-            format!("./.vault/private_keys/{username}.pem"),
-            format!("./.vault/private_keys/{username}_backup_{timestamp}.pem"),
-        );
-        let _ = fs::rename(
-            format!("./.vault/private_keys/{username}{PUBLIC_KEY_EXTENSION}"),
-            format!("./.vault/private_keys/{username}_backup_{timestamp}{PUBLIC_KEY_EXTENSION}"),
-        );
+        for extension in KEY_EXTENSIONS {
+            let from = path(username, extension);
+
+            if fs::metadata(&from).is_err() {
+                continue;
+            }
+
+            let to = path(&format!("{username}_backup_{timestamp}"), extension);
+
+            fs::rename(&from, &to).with_context(|| format!("could not rename {from} to {to}"))?;
+        }
 
         Ok(())
     }
