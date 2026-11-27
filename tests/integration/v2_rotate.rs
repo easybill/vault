@@ -1024,6 +1024,75 @@ fn superseded_v1_key_in_key_path_only_decrypts() {
     });
 }
 
+// MARK: Unrelated V1 keys
+
+/// `~/.vault/private_keys` is shared by all repositories. A V1 key of another repository is
+/// loaded before carol's V2 key and is active, but the V2 key comes first for new secrets and
+/// rotations.
+#[test]
+fn v2_key_comes_before_an_unrelated_v1_key() {
+    let vault = TestVault::from_fixture(GOLDEN_V2);
+    let key_dir = key_dir_of(&vault, "carol");
+    // A V1 key whose name this repository does not register.
+    let home_keys = vault.home().join(".vault/private_keys");
+    fs::create_dir_all(&home_keys).unwrap();
+    fs::write(home_keys.join("zed.pem"), alice_private_key()).unwrap();
+    fs::write(home_keys.join("zed.pub.pem"), alice_public_key()).unwrap();
+    let home_before = snapshot(&home_keys);
+
+    // The loaded keys keep their loading order, the new secret is encrypted for carol.
+    fs::write(vault.secret_dir("NEW"), "new secret").unwrap();
+    assert_success(
+        &run(&mut with_v2_keys(&vault, &key_dir)),
+        b"\ncreate key map.\n\n\nnew secrets (1):\n  - ./.vault/secrets/NEW\n\n\
+          loaded keys:\n- zed\n- carol\n\nall fine\n\n",
+        "",
+        "new secret",
+    );
+    assert_v2_crypt_file(
+        &vault.crypt_path("NEW", "carol"),
+        &v2_private_key("carol"),
+        b"new secret",
+    );
+
+    // carol's V2 key is rotated, zed is neither rotated nor registered.
+    let mut secrets = CAROL_SECRETS.to_vec();
+    secrets.push("NEW");
+    assert_rotate_output(
+        &run(with_v2_keys(&vault, &key_dir).arg("rotate")),
+        "carol",
+        &secrets,
+    );
+    let new_private = read(&key_dir.join(format!("{REPOSITORY_ID}.pem")));
+    assert_ne!(new_private, v2_private_key("carol"));
+    for secret in CAROL_SECRETS {
+        assert_v2_crypt_file(
+            &vault.crypt_path(secret, "carol"),
+            &new_private,
+            &vault.expected(secret),
+        );
+    }
+    assert_v2_crypt_file(
+        &vault.crypt_path("NEW", "carol"),
+        &new_private,
+        b"new secret",
+    );
+
+    assert_eq!(
+        snapshot(&home_keys),
+        home_before,
+        "zed's keys are unchanged"
+    );
+    let repository = snapshot(&vault.path());
+    assert!(
+        repository
+            .keys()
+            .all(|path| !path.to_str().unwrap().contains("zed")),
+        "nothing of zed in the repository: {:?}",
+        repository.keys().collect::<Vec<_>>()
+    );
+}
+
 // MARK: No downgrade
 
 /// A plain `rotate` of a V2 key stays V2, see `rotate_v2_key_keeps_a_backup_and_the_subscriptions`.
