@@ -317,9 +317,11 @@ the changes in `.vault/`.
 - V2: `[REPOSITORY_ID].pem` (`.pem.pub`, `.pem.pgp`) is renamed to `[REPOSITORY_ID]_backup_[TIMESTAMP].pem` (`.pem.pub`,
   `.pem.pgp`) and the new key takes its place. Backups are kept and still decrypt, so older branches and commits stay
   readable. The subscriptions in `config.toml` are kept.
-- V1: the new key is written to `./.vault/private_keys/[USER].pem` and the old key there is renamed to
-  `[USER]_backup_[TIMESTAMP].pem`, which only decrypts. If the old key was loaded from elsewhere
-  (`VAULT_PRIVATE_KEY_PATH`, `~/.vault/private_keys` or a `.pem.pgp` file), replace its files with the new
+- V1: the new key is written to `./.vault/private_keys/[USER].pem` and the old key there, `[USER].pem` or
+  `[USER].pem.pgp` with its `[USER].pub.pem`, is renamed to `[USER]_backup_[TIMESTAMP].pem` (`.pem.pgp`, `.pub.pem`),
+  which only decrypts. The new key is never gpg encrypted, see
+  [PGP / GPG + Smart Cards](#pgp--gpg--smart-cards) to encrypt it. If the old key was loaded from elsewhere
+  (`VAULT_PRIVATE_KEY_PATH` or `~/.vault/private_keys`), replace its files with the new
   `./.vault/private_keys/[USER].pem` and `[USER].pub.pem`. The `config.toml` of the user starts without subscriptions.
 
 ### Migrate a V1 key to V2
