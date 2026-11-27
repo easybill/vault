@@ -7,7 +7,7 @@ use semver::{Version, VersionReq};
 use crate::commands::get_multi::get_multi;
 use crate::filesystem::{Filesystem, FilesystemCheckResult};
 use crate::key::key_map::KeyMap;
-use crate::policy::{Policy, Version1};
+use crate::policy::{Policy, Version1, Version2};
 use crate::rotate_key::rotate_keys;
 use crate::template::Template;
 use crate::ui::question::Question;
@@ -87,6 +87,13 @@ fn run() -> Result<()> {
         .subcommand(
             clap::Command::new("rotate")
                 .about("rotated the private key")
+                .arg(
+                    Arg::new("migrate")
+                        .long("migrate")
+                        .value_name("VERSION")
+                        .value_parser(["v2"])
+                        .help("rotates the first active V1 key into a key of this version"),
+                ),
         )
         .subcommand(
             clap::Command::new("check-keys")
@@ -184,8 +191,13 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    if let Some(_matches) = matches.subcommand_matches("rotate") {
-        rotate_keys().context("rotate keys")?;
+    if let Some(matches) = matches.subcommand_matches("rotate") {
+        // `v2` is the only value of `--migrate` that clap accepts.
+        let migrate_to = matches
+            .get_one::<String>("migrate")
+            .map(|_| &Version2 as &'static dyn Policy);
+
+        rotate_keys(migrate_to).context("rotate keys")?;
         return Ok(());
     }
 

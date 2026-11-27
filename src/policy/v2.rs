@@ -25,6 +25,15 @@ const PUBLIC_KEY_LABEL: &str = "XWING PUBLIC KEY";
 const PRIVATE_KEY_EXTENSION: &str = ".pem";
 const PGP_PRIVATE_KEY_EXTENSION: &str = ".pem.pgp";
 const PUBLIC_KEY_EXTENSION: &str = ".pem.pub";
+/// Every file of a key pair, the private key files first.
+const KEY_EXTENSIONS: [&str; 3] = [
+    PRIVATE_KEY_EXTENSION,
+    PGP_PRIVATE_KEY_EXTENSION,
+    PUBLIC_KEY_EXTENSION,
+];
+
+/// Added to the repository ID for the new key while a V2 key is rotated.
+const ROTATE_SUFFIX: &str = "_to_rotate";
 
 const REPOSITORY_ID_PATH: &str = "./.vault/repository_id";
 
@@ -38,8 +47,10 @@ const TAG_SIZE: usize = 16;
 /// Private keys live outside the repository in the key directory ([`Version2::key_dir`]),
 /// named after the repository ID: `<ID>.pem` with `<ID>.pem.pub` for the current key and
 /// `<ID>_backup_<unix seconds>.pem` with `.pem.pub` for older ones. A private key can also be
-/// stored gpg encrypted as `.pem.pgp` instead of `.pem`. A local key belongs to the user whose
-/// registered public key `.vault/keys/<user>/*.pem.pub` holds the same key.
+/// stored gpg encrypted as `.pem.pgp` instead of `.pem`. While a V2 key is rotated, the new key
+/// is `<ID>_to_rotate.pem` with `.pem.pub` and is not loaded. Nothing in the key directory is
+/// overwritten or deleted. A local key belongs to the user whose registered public key
+/// `.vault/keys/<user>/*.pem.pub` holds the same key.
 #[derive(Debug)]
 pub struct Version2;
 
@@ -200,73 +211,14 @@ impl Policy for Version2 {
     fn create_key(&self, username: &str) -> Result<Pem> {
         println!("generating keys ...");
 
-        let key_dir = Self::key_dir().context(
-            "could not find the home directory for the V2 key directory ~/.vault/v2, \
-             set VAULT_V2_KEY_PATH",
-        )?;
+        let key_dir = Self::existing_key_dir()?;
         let repository_id = read_repository_id()?;
 
         if let Some(repository_id) = &repository_id {
-            for extension in [
-                PRIVATE_KEY_EXTENSION,
-                PGP_PRIVATE_KEY_EXTENSION,
-                PUBLIC_KEY_EXTENSION,
-            ] {
-                let path = key_dir.join(format!("{repository_id}{extension}"));
-                if fs::symlink_metadata(&path).is_ok() {
-                    bail!(
-                        "could not create the key, the file {} already exists",
-                        path.display()
-                    );
-                }
-            }
+            ensure_no_key_files(&key_dir, repository_id)?;
         }
 
-        let user_dir = format!("./.vault/keys/{username}");
-
-        if fs::symlink_metadata(&user_dir).is_ok() {
-            bail!("could not create the key, the user directory {user_dir} already exists");
-        }
-
-        let repository_id = match repository_id {
-            Some(repository_id) => repository_id,
-            None => create_repository_id()?,
-        };
-
-        let decapsulation_key = DecapsulationKey::generate();
-        let private_pem = encode_private_key(&decapsulation_key)?;
-        let public_pem = encode_public_key(decapsulation_key.encapsulation_key())?;
-
-        create_key_dir(&key_dir)?;
-        create_file(
-            &key_dir.join(format!("{repository_id}{PRIVATE_KEY_EXTENSION}")),
-            private_pem.as_bytes(),
-            true,
-        )?;
-        create_file(
-            &key_dir.join(format!("{repository_id}{PUBLIC_KEY_EXTENSION}")),
-            public_pem.as_bytes(),
-            false,
-        )?;
-
-        fs::create_dir(&user_dir)
-            .with_context(|| format!("could not create directory {user_dir}"))?;
-        create_file(
-            Path::new(&format!("{user_dir}/config.toml")),
-            b"subscriptions = []",
-            false,
-        )?;
-        create_file(
-            Path::new(&format!("{user_dir}/{username}{PUBLIC_KEY_EXTENSION}")),
-            public_pem.as_bytes(),
-            false,
-        )?;
-
-        Ok(Pem::new(
-            PrivateKey::new(private_pem.into_bytes(), username.to_string()),
-            PublicKey::new(public_pem.into_bytes(), username.to_string(), &Version2),
-            true,
-        ))
+        create_key_pair(&key_dir, repository_id, "", username, b"subscriptions = []")
     }
 
     fn encrypt(
@@ -336,17 +288,118 @@ impl Policy for Version2 {
         Ok(UnencryptedVaultFile::new(content))
     }
 
-    fn backup_private_key(&self, _username: &str, _timestamp: u64) {
-        unreachable!("rotate_keys does not rotate V2 keys");
+    /// Replacing a V2 key writes `<ID>_to_rotate.pem` with `.pem.pub`, replacing a key of an older
+    /// policy writes the current key `<ID>.pem` with `.pem.pub` and creates the repository ID if
+    /// it is missing. Either fails before writing anything if a leftover `<ID>_to_rotate` file or
+    /// one of the files to write exists. The new user gets the `config.toml` of the replaced user.
+    fn create_replacement_key(&self, username: &str, replaced: &Pem) -> Result<Pem> {
+        println!("generating keys ...");
+
+        let key_dir = Self::existing_key_dir()?;
+        let repository_id = read_repository_id()?;
+        let same_policy = replaced.policy().file_version() == self.file_version();
+
+        if let Some(repository_id) = &repository_id {
+            for extension in KEY_EXTENSIONS {
+                let path = key_dir.join(format!("{repository_id}{ROTATE_SUFFIX}{extension}"));
+                if exists(&path) {
+                    bail!(
+                        "could not rotate the key, the file {} is left over from an interrupted \
+                         rotation, remove it once the repository is restored with git",
+                        path.display()
+                    );
+                }
+            }
+
+            if !same_policy {
+                ensure_no_key_files(&key_dir, repository_id)?;
+            }
+        }
+
+        let config_path = format!("./.vault/keys/{}/config.toml", replaced.name());
+        let config = match fs::read(&config_path) {
+            Ok(config) => config,
+            Err(error) if error.kind() == ErrorKind::NotFound => b"subscriptions = []".to_vec(),
+            Err(error) => {
+                return Err(error).with_context(|| format!("could not read {config_path}"));
+            }
+        };
+
+        let stem_suffix = if same_policy { ROTATE_SUFFIX } else { "" };
+
+        create_key_pair(&key_dir, repository_id, stem_suffix, username, &config)
     }
 
-    fn key_renames(&self, _from: &str, _to: &str) -> Vec<Rename> {
-        unreachable!("rotate_keys does not rotate V2 keys");
+    /// Renames every file of the current key (`<ID>.pem`, `<ID>.pem.pgp`, `<ID>.pem.pub`), no
+    /// matter which user it belongs to, to `<ID>_backup_<timestamp>`. If a file of that backup
+    /// name exists, the timestamp is increased until none does.
+    fn backup_private_key(&self, _username: &str, timestamp: u64) -> Result<()> {
+        let key_dir = Self::existing_key_dir()?;
+        let repository_id = read_repository_id()?
+            .with_context(|| format!("could not find the repository ID {REPOSITORY_ID_PATH}"))?;
+
+        let current_extensions: Vec<&str> = KEY_EXTENSIONS
+            .into_iter()
+            .filter(|extension| exists(&key_dir.join(format!("{repository_id}{extension}"))))
+            .collect();
+
+        let mut timestamp = timestamp;
+        while KEY_EXTENSIONS.into_iter().any(|extension| {
+            exists(&key_dir.join(format!("{repository_id}_backup_{timestamp}{extension}")))
+        }) {
+            timestamp += 1;
+        }
+
+        for extension in current_extensions {
+            let from = key_dir.join(format!("{repository_id}{extension}"));
+            let to = key_dir.join(format!("{repository_id}_backup_{timestamp}{extension}"));
+
+            fs::rename(&from, &to).with_context(|| {
+                format!("could not rename {} to {}", from.display(), to.display())
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// `<ID>_to_rotate.pem.pub` and `.pem` become the current key if they exist, then the user
+    /// directory and the public key in it are renamed. The public key comes first, a public key
+    /// without its private key is never loaded.
+    fn key_renames(&self, from: &str, to: &str) -> Result<Vec<Rename>> {
+        let key_dir = Self::existing_key_dir()?;
+        let repository_id = read_repository_id()?
+            .with_context(|| format!("could not find the repository ID {REPOSITORY_ID_PATH}"))?;
+
+        let mut renames = vec![];
+
+        for extension in [PUBLIC_KEY_EXTENSION, PRIVATE_KEY_EXTENSION] {
+            let rotated = key_dir.join(format!("{repository_id}{ROTATE_SUFFIX}{extension}"));
+
+            if exists(&rotated) {
+                renames.push(Rename {
+                    from: rotated.display().to_string(),
+                    to: key_dir
+                        .join(format!("{repository_id}{extension}"))
+                        .display()
+                        .to_string(),
+                });
+            }
+        }
+
+        renames.push(Rename {
+            from: format!("./.vault/keys/{from}"),
+            to: format!("./.vault/keys/{to}"),
+        });
+        renames.push(Rename {
+            from: format!("./.vault/keys/{to}/{from}{PUBLIC_KEY_EXTENSION}"),
+            to: format!("./.vault/keys/{to}/{to}{PUBLIC_KEY_EXTENSION}"),
+        });
+
+        Ok(renames)
     }
 }
 
 impl Version2 {
-    /// The key directory, `VAULT_V2_KEY_PATH` or `~/.vault/v2`.
     /// The key directory: `VAULT_V2_KEY_PATH` unless it is empty, else `~/.vault/v2`. `None`
     /// without either.
     fn key_dir() -> Option<PathBuf> {
@@ -358,6 +411,88 @@ impl Version2 {
 
         dirs::home_dir().map(|home_dir| home_dir.join(".vault/v2"))
     }
+
+    /// The key directory for writing keys, an error without one.
+    fn existing_key_dir() -> Result<PathBuf> {
+        Self::key_dir().context(
+            "could not find the home directory for the V2 key directory ~/.vault/v2, \
+             set VAULT_V2_KEY_PATH",
+        )
+    }
+}
+
+/// Whether a file, directory or symlink exists at `path`.
+fn exists(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok()
+}
+
+/// Fails if a key file `<stem>.pem`, `<stem>.pem.pgp` or `<stem>.pem.pub` exists in `key_dir`.
+fn ensure_no_key_files(key_dir: &Path, stem: &str) -> Result<()> {
+    for extension in KEY_EXTENSIONS {
+        let path = key_dir.join(format!("{stem}{extension}"));
+        if exists(&path) {
+            bail!(
+                "could not create the key, the file {} already exists",
+                path.display()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Generates a key pair, writes it as `<ID><stem_suffix>.pem` with `.pem.pub` and registers it as
+/// `.vault/keys/<username>/` with `config`. Creates the repository ID if `repository_id` is
+/// `None`. Fails before writing anything if the user directory exists.
+fn create_key_pair(
+    key_dir: &Path,
+    repository_id: Option<String>,
+    stem_suffix: &str,
+    username: &str,
+    config: &[u8],
+) -> Result<Pem> {
+    let user_dir = format!("./.vault/keys/{username}");
+
+    if exists(Path::new(&user_dir)) {
+        bail!("could not create the key, the user directory {user_dir} already exists");
+    }
+
+    let repository_id = match repository_id {
+        Some(repository_id) => repository_id,
+        None => create_repository_id()?,
+    };
+    let stem = format!("{repository_id}{stem_suffix}");
+
+    let decapsulation_key = DecapsulationKey::generate();
+    let private_pem = encode_private_key(&decapsulation_key)?;
+    let public_pem = encode_public_key(decapsulation_key.encapsulation_key())?;
+
+    // The public key comes first, a public key without its private key is never loaded.
+    create_key_dir(key_dir)?;
+    create_file(
+        &key_dir.join(format!("{stem}{PUBLIC_KEY_EXTENSION}")),
+        public_pem.as_bytes(),
+        false,
+    )?;
+    create_file(
+        &key_dir.join(format!("{stem}{PRIVATE_KEY_EXTENSION}")),
+        private_pem.as_bytes(),
+        true,
+    )?;
+
+    fs::create_dir(&user_dir).with_context(|| format!("could not create directory {user_dir}"))?;
+    create_file(Path::new(&format!("{user_dir}/config.toml")), config, false)?;
+    create_file(
+        Path::new(&format!("{user_dir}/{username}{PUBLIC_KEY_EXTENSION}")),
+        public_pem.as_bytes(),
+        false,
+    )?;
+
+    Ok(Pem::new(
+        PrivateKey::new(private_pem.into_bytes(), username.to_string()),
+        PublicKey::new(public_pem.into_bytes(), username.to_string(), &Version2),
+        true,
+    ))
 }
 
 /// The repository ID from `.vault/repository_id` in its canonical form, `None` if the file is

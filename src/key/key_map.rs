@@ -391,6 +391,28 @@ impl KeyMap {
         &self.pems
     }
 
+    /// The loaded keys that encrypt new secrets and can be rotated, in loading order: the active
+    /// keys that are not superseded. A key is superseded when the repository registers a key of
+    /// a newer policy for the user of the same name, it then only decrypts.
+    pub fn active_pems(&self) -> impl Iterator<Item = &Pem> {
+        self.pems.iter().filter(|pem| {
+            pem.is_active()
+                && self
+                    .registered_file_version(pem.name())
+                    .is_none_or(|version| version <= pem.policy().file_version())
+        })
+    }
+
+    /// The highest file version of the public keys registered for `user`, `None` without one.
+    pub fn registered_file_version(&self, user: &str) -> Option<u16> {
+        self.entries
+            .iter()
+            .filter(|entry| entry.user == user)
+            .flat_map(|entry| &entry.keys)
+            .map(|key| key.policy().file_version())
+            .max()
+    }
+
     pub fn open_subscriptions(&self) -> Vec<Subscription> {
         let mut buffer = vec![];
 
@@ -408,13 +430,9 @@ impl KeyMap {
     }
 
     pub fn add_new_secret(&self, filepath: &str) -> Result<()> {
-        let pem = self
-            .private_pems()
-            .iter()
-            .find(|pem| pem.is_active())
-            .with_context(|| {
-                format!("could not fine private key for you, no idea how to encrypt {filepath}")
-            })?;
+        let pem = self.active_pems().next().with_context(|| {
+            format!("could not fine private key for you, no idea how to encrypt {filepath}")
+        })?;
 
         let file_content = {
             let mut f =

@@ -18,4 +18,5 @@ mod support_v2;
 mod template;
 mod v2_format;
 mod v2_keys;
+mod v2_rotate;
 mod v2_subscriptions;
